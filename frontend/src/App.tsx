@@ -7,6 +7,7 @@ import "./App.css";
 
 type Page =
   | 'home'
+  | 'catalog'
   | 'create'
   | 'requests'
   | 'publish'
@@ -57,6 +58,7 @@ export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [step, setStep] = useState(0);
   const [notice, setNotice] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState("");
 
   // YAML
   const [fileName, setFileName] = useState("");
@@ -277,6 +279,39 @@ export default function App() {
       {label}
     </button>
   );
+
+  const apiCatalog = [
+    { name: "Customer API", proxy: "customer-api", owner: "Customer Platform", revision: "r12", environment: "prod", status: "Healthy", description: "Customer profiles, preferences and account services." },
+    { name: "Payments API", proxy: "payments-api", owner: "Commerce Platform", revision: "r8", environment: "prod", status: "Healthy", description: "Secure payment initiation and transaction status." },
+    { name: "Shipment API", proxy: "shipment-api", owner: "Logistics", revision: "r4", environment: "test", status: "Review needed", description: "Shipment creation, tracking and carrier operations." },
+  ];
+
+  function renderCatalog() {
+    const visibleApis = apiCatalog.filter((item) =>
+      `${item.name} ${item.proxy} ${item.owner}`.toLowerCase().includes(catalogQuery.toLowerCase())
+    );
+
+    return <>
+      {title("API catalog", "Discover managed APIs, deployment health and ownership across your Apigee organization.")}
+      <section className="catalog-toolbar">
+        <label className="catalog-search">
+          <span>Search APIs</span>
+          <input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search by API, proxy or owner" />
+        </label>
+        <button className="secondary" onClick={() => setCatalogQuery("")}>Clear filters</button>
+        <button className="primary" onClick={goCreate}>+ Create API</button>
+      </section>
+      <div className="api-catalog-grid">
+        {visibleApis.map((item) => <article className="api-card" key={item.proxy}>
+          <div className="api-card-top"><span className="api-mark">API</span><em className={`badge ${item.status === "Healthy" ? "green" : "amber"}`}>{item.status}</em></div>
+          <h2>{item.name}</h2><code>{item.proxy}</code><p>{item.description}</p>
+          <dl><dt>Owner</dt><dd>{item.owner}</dd><dt>Deployment</dt><dd>{item.environment} · {item.revision}</dd></dl>
+          <div className="api-card-actions"><button className="secondary" onClick={() => setPage("resources")}>View details</button><button className="text-button" onClick={() => setPage("publish")}>Deploy</button></div>
+        </article>)}
+      </div>
+      {visibleApis.length === 0 && <section className="empty-state"><strong>No APIs found</strong><span>Try another search term or create a new API.</span></section>}
+    </>;
+  }
 
   function renderAuthenticationConfiguration() {
     if (auth === "API Key") {
@@ -1366,11 +1401,12 @@ paths: {}`}
     <div className="shell">
       <header>
         <div className="brand">
-          <b>⌘</b> Apigee Developer Portal
+          <b>AX</b>
+          <span>Apigee <em>Control Center</em></span>
         </div>
 
         <div className="top-right">
-          <span>Apigee X</span>
+          <span className="connection"><i /> Management API connected</span>
           <span>Environment: {env}</span>
           <span className="avatar">JD</span>
           <span>Developer</span>
@@ -1378,7 +1414,9 @@ paths: {}`}
       </header>
 
       <aside className="sidebar">
-        {nav("⌂  Dashboard", "home")}
+        <p className="nav-section">WORKSPACE</p>
+        {nav("Dashboard", "home")}
+        {nav("API catalog", "catalog")}
 
         <button
           className={`nav ${page === "create" ? "active" : ""}`}
@@ -1391,13 +1429,14 @@ paths: {}`}
           New API (YAML)
         </button>
 
-        {nav("➤  Publish API", "publish")}
-        {nav("◎  Access / Read Only", "resources")}
-        {nav("◇  Approve Requests", "approve")}
+        {nav("Deployments", "publish")}
+        {nav("Resources", "resources")}
+        {nav("Approvals", "approve")}
 
         <hr />
 
-        {nav("▤  My Requests", "requests")}
+        <p className="nav-section">WORKFLOW</p>
+        {nav("My requests", "requests")}
 
         <hr />
 
@@ -1422,7 +1461,7 @@ paths: {}`}
         </button>
 
         <div className="sidebar-bottom">
-          ● Frontend prototype · Mock data
+          <span className="status-light" /> Sandbox workspace
         </div>
       </aside>
 
@@ -1437,12 +1476,19 @@ paths: {}`}
             onViewRequests={() => setPage("requests")}
             onCreateAnother={goCreate}
           />
-        ) : page === "home" ? (
+        ) : page === "catalog" ? renderCatalog() : page === "home" ? (
           <>
             {title(
-              "Welcome to Apigee Developer Portal",
-              "Self-service platform to create, publish, manage and discover APIs on Apigee X."
+              "Good morning, Jordan",
+              "Here is the current health of your API platform."
             )}
+
+            <section className="metrics-grid">
+              <div className="metric"><span>Managed APIs</span><strong>12</strong><small>+2 this month</small></div>
+              <div className="metric"><span>Healthy deployments</span><strong>18</strong><small>Across 4 environments</small></div>
+              <div className="metric"><span>Pending approval</span><strong>03</strong><small>Needs your review</small></div>
+              <div className="metric"><span>Policy compliance</span><strong>96%</strong><small>+4% from last week</small></div>
+            </section>
 
             <div className="home-cards">
               {[
