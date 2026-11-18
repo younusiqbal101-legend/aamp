@@ -2169,3 +2169,13 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
+.badge.red {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
