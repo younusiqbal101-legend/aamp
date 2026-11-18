@@ -81,6 +81,10 @@ export default function App() {
     "APIs to manage shipment operations."
   );
   const [env, setEnv] = useState("dev");
+  const [owningTeam, setOwningTeam] = useState("Platform APIs");
+  const [contactEmail, setContactEmail] = useState("api-platform@company.com");
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [isEditingOperations, setIsEditingOperations] = useState(false);
 
   // Consumer and authentication
   const [consumer, setConsumer] = useState("Internal");
@@ -262,7 +266,8 @@ export default function App() {
     value: string,
     onChange: (value: string) => void,
     placeholder = "",
-    type = "text"
+    type = "text",
+    disabled = false
   ) => (
     <label className="field">
       <span>{label}</span>
@@ -271,6 +276,7 @@ export default function App() {
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        disabled={disabled}
       />
     </label>
   );
@@ -279,13 +285,15 @@ export default function App() {
     label: string,
     value: string,
     onChange: (value: string) => void,
-    options: string[]
+    options: string[],
+    disabled = false
   ) => (
     <label className="field">
       <span>{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -397,6 +405,7 @@ export default function App() {
       className={`nav ${page === destination ? "active" : ""}`}
       onClick={() => setPage(destination)}
     >
+      <span className="nav-icon" aria-hidden="true" />
       {label}
     </button>
   );
@@ -432,6 +441,24 @@ export default function App() {
       </div>
       {visibleApis.length === 0 && <section className="empty-state"><strong>No APIs found</strong><span>Try another search term or create a new API.</span></section>}
     </>;
+  }
+
+  function renderOpenApiSummary() {
+    const methods = Array.from(
+      new Set(parsedSpec?.resources.flatMap((resource) => resource.operations.map((operation) => operation.method)) ?? [])
+    );
+
+    return panel(
+      <div className="openapi-summary-card">
+        <h3>OpenAPI Summary <small>(From YAML)</small></h3>
+        <div className="summary-line"><span>OpenAPI Version</span><b>{parsedSpec?.specVersion || "Not detected"}</b></div>
+        <div className="summary-line"><span>API Title</span><b>{parsedSpec?.title || display}</b></div>
+        <div className="summary-line"><span>Total Endpoints</span><b>{parsedSpec?.resources.length ?? 0}</b></div>
+        <div className="summary-line methods-line"><span>HTTP Methods</span><div>{methods.length ? methods.map((method) => <em key={method} className={`method-chip method-${method.toLowerCase()}`}>{method}</em>) : <b>None</b>}</div></div>
+        <div className="summary-line"><span>Schemas / Models</span><b>{parsedSpec?.schemaCount ?? 0}</b></div>
+      </div>,
+      "aside"
+    );
   }
 
   function renderAuthenticationConfiguration() {
@@ -1001,16 +1028,15 @@ paths: {}`}
             )}
 
             {panel(
-              <>
+              <div className="validation-check-card">
                 <h3>Validation checks</h3>
-                <ul>
-                  <li>OpenAPI version</li>
-                  <li>API title and description</li>
-                  <li>Paths and operations</li>
-                  <li>Request and response schemas</li>
-                  <li>Organization naming rules</li>
+                <ul className={valid ? "validation-list is-valid" : "validation-list"}>
+                  {["OpenAPI version", "API title and description", "Paths and operations", "Request and response schemas", "Organization naming rules"].map((check) => (
+                    <li key={check}><i>{valid ? "✓" : "○"}</i>{check}</li>
+                  ))}
                 </ul>
-              </>,
+                <small>{valid ? "All checks passed" : "Upload and validate YAML to run these checks."}</small>
+              </div>,
               "aside"
             )}
           </div>
@@ -1022,52 +1048,37 @@ paths: {}`}
             <div className="columns">
               {panel(
                 <>
-                  <h2>Step 2: API Details</h2>
+                  <div className="section-title-row">
+                    <h2>Step 2: API Details</h2>
+                    <button className="edit-button" type="button" onClick={() => setIsEditingDetails((editing) => !editing)}>
+                      {isEditingDetails ? "Done" : "Edit details"}
+                    </button>
+                  </div>
                   <p>
                     Review the API metadata extracted from your OpenAPI
-                    document. You can adjust the portal-level details.
+                    document. Select Edit details to make a change.
                   </p>
 
                   <div className="form">
-                    {field("API Name *", api, setApi)}
-                    {field("Display Name *", display, setDisplay)}
-                    {field("Base Path *", basePath, setBasePath)}
-                    {field("API Version *", version, setVersion)}
-                    {field("Description *", description, setDescription)}
+                    {field("Proxy Name *", api, setApi, "", "text", !isEditingDetails)}
+                    {field("Display Name *", display, setDisplay, "", "text", !isEditingDetails)}
+                    {field("Base Path *", basePath, setBasePath, "", "text", !isEditingDetails)}
+                    {field("API Version *", version, setVersion, "", "text", !isEditingDetails)}
+                    {field("Description *", description, setDescription, "", "text", !isEditingDetails)}
                     {select(
                       "Environment *",
                       env,
                       setEnv,
-                      ["dev", "test", "stage", "prod"]
+                      ["dev", "test", "stage", "prod"],
+                      !isEditingDetails
                     )}
-                    {field("Owning Team", "Platform APIs", () => {})}
-                    {field("Contact Email", "api-platform@company.com", () => {})}
+                    {field("Owning Team", owningTeam, setOwningTeam, "", "text", !isEditingDetails)}
+                    {field("Contact Email", contactEmail, setContactEmail, "", "email", !isEditingDetails)}
                   </div>
                 </>
               )}
 
-              {panel(
-                <>
-                  <h3>OpenAPI Summary</h3>
-                  <dl>
-                    <dt>Specification</dt>
-                    <dd>{parsedSpec?.specVersion || "Not detected"}</dd>
-                    <dt>API title</dt>
-                    <dd>{parsedSpec?.title || display}</dd>
-                    <dt>API version</dt>
-                    <dd>{parsedSpec?.version || version}</dd>
-                    <dt>Resources</dt>
-                    <dd>{parsedSpec?.resources.length ?? 0}</dd>
-                    <dt>Operations</dt>
-                    <dd>{parsedSpec?.totalOperations ?? 0}</dd>
-                    <dt>Request / response schemas</dt>
-                    <dd>{parsedSpec?.schemaCount ?? 0}</dd>
-                    <dt>Source file</dt>
-                    <dd>{fileName || "Pasted YAML"}</dd>
-                  </dl>
-                </>,
-                "aside"
-              )}
+              {renderOpenApiSummary()}
             </div>
 
             <section className="panel generated-resources-panel">
@@ -1080,10 +1091,15 @@ paths: {}`}
                     Apigee flow names and conditions before continuing.
                   </p>
                 </div>
-                <span className="resource-count">
+                <div className="generated-heading-actions">
+                  <button className="edit-button" type="button" disabled={!parsedSpec} onClick={() => setIsEditingOperations((editing) => !editing)}>
+                    {isEditingOperations ? "Done" : "Edit operations"}
+                  </button>
+                  <span className="resource-count">
                   {parsedSpec?.resources.length ?? 0} resources ·{" "}
                   {parsedSpec?.totalOperations ?? 0} operations
-                </span>
+                  </span>
+                </div>
               </div>
 
               {!parsedSpec ? (
@@ -1125,6 +1141,7 @@ paths: {}`}
                                 <input
                                   type="checkbox"
                                   checked={operation.enabled}
+                                  disabled={!isEditingOperations}
                                   onChange={(event) => {
                                     setParsedSpec((previous) =>
                                       previous
@@ -1157,6 +1174,7 @@ paths: {}`}
                                 <span>Apigee Flow Name</span>
                                 <input
                                   value={operation.flowName}
+                                  disabled={!isEditingOperations}
                                   onChange={(event) => {
                                     const value = event.target.value;
                                     setParsedSpec((previous) =>
@@ -1181,6 +1199,7 @@ paths: {}`}
                                 <span>Conditional Flow Expression</span>
                                 <input
                                   value={operation.condition}
+                                  disabled={!isEditingOperations}
                                   onChange={(event) => {
                                     const value = event.target.value;
                                     setParsedSpec((previous) =>
@@ -1509,8 +1528,13 @@ paths: {}`}
             </button>
 
             {step < 5 ? (
-              <button className="primary" onClick={next}>
-                Next: {steps[step + 1]} →
+              <button
+                className="primary"
+                onClick={next}
+                disabled={step === 0 && (!valid || !parsedSpec)}
+                title={step === 0 && (!valid || !parsedSpec) ? "Upload and validate the OpenAPI YAML to continue" : undefined}
+              >
+                Next
               </button>
             ) : (
               <button className="primary" onClick={submit} disabled={submitting}>
@@ -1540,28 +1564,25 @@ paths: {}`}
       </header>
 
       <aside className="sidebar">
-        <p className="nav-section">WORKSPACE</p>
         {nav("Dashboard", "home")}
-        {nav("API catalog", "catalog")}
 
         <button
-          className={`nav ${page === "create" ? "active" : ""}`}
+          className={`nav create-nav ${page === "create" ? "active" : ""}`}
           onClick={goCreate}
         >
-          + Create API
+          <span className="nav-icon" aria-hidden="true" /> Create API <span className="chevron">⌃</span>
         </button>
 
-        <button className="subnav" onClick={goCreate}>
+        <button className={`subnav ${page === "create" ? "active" : ""}`} onClick={goCreate}>
           New API (YAML)
         </button>
 
-        {nav("Deployments", "publish")}
-        {nav("Resources", "resources")}
-        {nav("Approvals", "approve")}
+        {nav("Publish API", "publish")}
+        {nav("Access / Read Only", "resources")}
+        {nav("Approve Requests", "approve")}
 
         <hr />
 
-        <p className="nav-section">WORKFLOW</p>
         {nav("My requests", "requests")}
 
         <hr />
@@ -1609,19 +1630,13 @@ paths: {}`}
           />
         ) : page === "catalog" ? renderCatalog() : page === "home" ? (
           <>
-            {title(
-              "Good morning, Jordan",
-              "Here is the current health of your API platform."
-            )}
-
-            <section className="metrics-grid">
-              <div className="metric"><span>Managed APIs</span><strong>12</strong><small>+2 this month</small></div>
-              <div className="metric"><span>Healthy deployments</span><strong>18</strong><small>Across 4 environments</small></div>
-              <div className="metric"><span>Pending approval</span><strong>03</strong><small>Needs your review</small></div>
-              <div className="metric"><span>Policy compliance</span><strong>96%</strong><small>+4% from last week</small></div>
+            <section className="dashboard-welcome">
+              <h1>Welcome to Apigee Developer Portal</h1>
+              <p>Choose the operation you want to perform.</p>
+              <span aria-hidden="true" />
             </section>
 
-            <div className="home-cards">
+            <section className="home-cards dashboard-actions" aria-label="Quick actions">
               {[
                 [
                   "Create",
@@ -1669,11 +1684,29 @@ paths: {}`}
                   <b>{card[2]} →</b>
                 </button>
               ))}
-            </div>
+            </section>
 
+            <section className="dashboard-section health-monitor">
+              <div className="dashboard-section-heading">
+                <div>
+                  <small>PLATFORM STATUS</small>
+                  <h2>Health Monitor</h2>
+                  <p>Current health of your API platform.</p>
+                </div>
+              </div>
+
+              <div className="metrics-grid">
+                <div className="metric"><span>Managed APIs</span><strong>12</strong><small>+2 this month</small></div>
+                <div className="metric"><span>Healthy deployments</span><strong>18</strong><small>Across 4 environments</small></div>
+                <div className="metric"><span>Pending approval</span><strong>03</strong><small>Needs your review</small></div>
+                <div className="metric"><span>Policy compliance</span><strong>96%</strong><small>+4% from last week</small></div>
+              </div>
+            </section>
+
+            <section className="dashboard-section dashboard-requests">
             {panel(
               <>
-                <h2>My Recent Requests</h2>
+                <h2>My Requests</h2>
                 <table>
                   <thead>
                     <tr>
@@ -1707,6 +1740,7 @@ paths: {}`}
                 </table>
               </>
             )}
+            </section>
           </>
         ) : page === "requests" ? (
           <>

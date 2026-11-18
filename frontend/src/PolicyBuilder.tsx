@@ -6,6 +6,25 @@ type PolicyDetails = {
   displayName: string;
 };
 
+const sharedFlowPlacements = [
+  "Proxy Endpoint Request PreFlow",
+  "Proxy Endpoint Request PostFlow",
+  "Proxy Endpoint Response PreFlow",
+  "Proxy Endpoint Response PostFlow",
+  "Target Endpoint Request PreFlow",
+  "Target Endpoint Request PostFlow",
+  "Target Endpoint Response PreFlow",
+  "Target Endpoint Response PostFlow",
+  "PostClientFlow",
+] as const;
+
+type SharedFlowPlacement = (typeof sharedFlowPlacements)[number];
+type SharedFlowSelection = {
+  name: string;
+  placement: SharedFlowPlacement;
+  calloutPolicyName: string;
+};
+
 type PolicyConfig = {
   quota: PolicyDetails & {
     limit: number;
@@ -26,7 +45,7 @@ type PolicyConfig = {
     methods: string;
     headers: string;
   };
-  sharedFlows: string[];
+  sharedFlows: SharedFlowSelection[];
   sharedFlowMode: "existing" | "new";
   newSharedFlow: {
     name: string;
@@ -111,6 +130,121 @@ const initialConfig: PolicyConfig = {
   },
 };
 
+const escapeXml = (value: string | number) =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+
+// The FlowCallout policy deliberately uses the Shared Flow name so the
+// generated bundle is easy to recognize in Apigee.
+const toCalloutPolicyName = (flowName: string) => flowName;
+
+function buildEndpointXml(config: PolicyConfig): string {
+  const policySteps = [
+    config.quota.enabled && config.quota.policyName,
+    config.spikeArrest.enabled && config.spikeArrest.policyName,
+    config.jsonThreatProtection.enabled && config.jsonThreatProtection.policyName,
+    config.cors.enabled && config.cors.policyName,
+  ].filter(Boolean) as string[];
+
+  const stepsAt = (placement: SharedFlowPlacement) =>
+    config.sharedFlows
+      .filter((flow) => flow.placement === placement)
+      .map((flow) => flow.calloutPolicyName);
+
+  const stepXml = (steps: string[], indent: string) =>
+    steps.map((name) => `${indent}<Step><Name>${escapeXml(name)}</Name></Step>`).join("\n");
+
+  const directionXml = (
+    label: string,
+    direction: "Request" | "Response",
+    steps: string[]
+  ) => [
+    `    <!-- ${label} -->`,
+    `    <${direction}>`,
+    steps.length
+      ? stepXml(steps, "      ")
+      : "      <!-- No steps configured -->",
+    `    </${direction}>`,
+  ].join("\n");
+
+  const endpointXml = (
+    endpoint: "ProxyEndpoint" | "TargetEndpoint",
+    requestPre: string[],
+    requestPost: string[],
+    responsePre: string[],
+    responsePost: string[]
+  ) => [
+    `<${endpoint} name="default">`,
+    "  <PreFlow name=\"PreFlow\">",
+    directionXml("Request PreFlow", "Request", requestPre),
+    directionXml("Response PreFlow", "Response", responsePre),
+    "  </PreFlow>",
+    "  <PostFlow name=\"PostFlow\">",
+    directionXml("Request PostFlow", "Request", requestPost),
+    directionXml("Response PostFlow", "Response", responsePost),
+    "  </PostFlow>",
+    ...(endpoint === "ProxyEndpoint"
+      ? [
+          "  <HTTPProxyConnection>",
+          "    <BasePath>/api</BasePath>",
+          "  </HTTPProxyConnection>",
+          "  <RouteRule name=\"default\">",
+          "    <TargetEndpoint>default</TargetEndpoint>",
+          "  </RouteRule>",
+        ]
+      : []),
+    `</${endpoint}>`,
+  ].join("\n");
+
+  const proxyXml = endpointXml(
+    "ProxyEndpoint",
+    [...policySteps, ...stepsAt("Proxy Endpoint Request PreFlow")],
+    stepsAt("Proxy Endpoint Request PostFlow"),
+    stepsAt("Proxy Endpoint Response PreFlow"),
+    stepsAt("Proxy Endpoint Response PostFlow")
+  );
+  const targetXml = endpointXml(
+    "TargetEndpoint",
+    stepsAt("Target Endpoint Request PreFlow"),
+    stepsAt("Target Endpoint Request PostFlow"),
+    stepsAt("Target Endpoint Response PreFlow"),
+    stepsAt("Target Endpoint Response PostFlow")
+  );
+  const postClient = stepsAt("PostClientFlow");
+
+  return [
+    proxyXml,
+    "",
+    targetXml,
+    "",
+    "<!-- ProxyEndpoint PostClientFlow -->",
+    "<PostClientFlow>",
+    "  <Response>",
+    postClient.length
+      ? stepXml(postClient, "    ")
+      : "    <!-- No steps configured -->",
+    "  </Response>",
+    "</PostClientFlow>",
+    ...(config.sharedFlows.length
+      ? [
+          "",
+          "<!-- Generated FlowCallout policies -->",
+          ...config.sharedFlows.flatMap((flow) => [
+            `<FlowCallout name="${escapeXml(flow.calloutPolicyName)}">`,
+            `  <DisplayName>${escapeXml(flow.name)}</DisplayName>`,
+            `  <SharedFlowBundle>${escapeXml(flow.name)}</SharedFlowBundle>`,
+            "</FlowCallout>",
+            "",
+          ]),
+        ]
+      : []),
+  ].join("\n");
+}
+
 export default function PolicyBuilder({
   environment,
   sharedFlowsByEnvironment,
@@ -122,6 +256,10 @@ export default function PolicyBuilder({
   const [expanded, setExpanded] = useState<string[]>([]);
   const [selectedExistingFlow, setSelectedExistingFlow] =
     useState("");
+  const [selectedFlowPlacement, setSelectedFlowPlacement] =
+    useState<SharedFlowPlacement>("Proxy Endpoint Request PreFlow");
+  const [isFlowMenuOpen, setIsFlowMenuOpen] = useState(false);
+  const [isPlacementMenuOpen, setIsPlacementMenuOpen] = useState(false);
 
   useEffect(() => {
     onChange(config);
@@ -131,6 +269,16 @@ export default function PolicyBuilder({
     sharedFlowsByEnvironment?.[environment.toLowerCase()] ??
     defaultSharedFlows[environment.toLowerCase()] ??
     [];
+
+  function chooseExistingSharedFlow(flow: string) {
+    setSelectedExistingFlow(flow);
+    setIsFlowMenuOpen(false);
+  }
+
+  function chooseFlowPlacement(placement: SharedFlowPlacement) {
+    setSelectedFlowPlacement(placement);
+    setIsPlacementMenuOpen(false);
+  }
 
   function updatePolicy(
     policy:
@@ -184,21 +332,34 @@ export default function PolicyBuilder({
 
     setConfig((current) => ({
       ...current,
-      sharedFlows: current.sharedFlows.includes(
-        selectedExistingFlow
+      sharedFlows: current.sharedFlows.some(
+        (flow) =>
+          flow.name === selectedExistingFlow &&
+          flow.placement === selectedFlowPlacement
       )
         ? current.sharedFlows
-        : [...current.sharedFlows, selectedExistingFlow],
+        : [
+            ...current.sharedFlows,
+            {
+              name: selectedExistingFlow,
+              placement: selectedFlowPlacement,
+              calloutPolicyName: toCalloutPolicyName(
+                selectedExistingFlow
+              ),
+            },
+          ],
     }));
 
     setSelectedExistingFlow("");
   }
 
-  function removeSharedFlow(flowName: string) {
+  function removeSharedFlow(flowToRemove: SharedFlowSelection) {
     setConfig((current) => ({
       ...current,
       sharedFlows: current.sharedFlows.filter(
-        (flow) => flow !== flowName
+        (flow) =>
+          flow.name !== flowToRemove.name ||
+          flow.placement !== flowToRemove.placement
       ),
     }));
   }
@@ -228,9 +389,22 @@ export default function PolicyBuilder({
 
     setConfig((current) => ({
       ...current,
-      sharedFlows: current.sharedFlows.includes(flowName)
+      sharedFlows: current.sharedFlows.some(
+        (flow) =>
+          flow.name === flowName &&
+          flow.placement === selectedFlowPlacement
+      )
         ? current.sharedFlows
-        : [...current.sharedFlows, flowName],
+        : [
+            ...current.sharedFlows,
+            {
+              name: flowName,
+              placement: selectedFlowPlacement,
+              calloutPolicyName: toCalloutPolicyName(
+                flowName
+              ),
+            },
+          ],
     }));
   }
 
@@ -262,6 +436,7 @@ export default function PolicyBuilder({
   const selectedCount = policyRows.filter(
     (row) => config[row.key].enabled
   ).length;
+  const endpointXml = buildEndpointXml(config);
 
   return (
     <div className="policy-builder compact-policy-builder">
@@ -280,6 +455,8 @@ export default function PolicyBuilder({
         </div>
       </div>
 
+      <div className="policy-workspace">
+      <div className="policy-editor">
       <section className="compact-policy-section">
         <div className="compact-section-title">
           <div>
@@ -288,7 +465,8 @@ export default function PolicyBuilder({
           </div>
         </div>
 
-        {policyRows.map((row) => {
+        <div className="compact-policy-grid">
+          {policyRows.map((row) => {
           const policy = config[row.key];
           const isExpanded = expanded.includes(row.key);
 
@@ -316,13 +494,25 @@ export default function PolicyBuilder({
                 {policy.enabled && (
                   <button
                     type="button"
-                    className="compact-config-button"
+                    className="compact-policy-toggle"
                     onClick={() => toggleExpanded(row.key)}
+                    aria-label={
+                      isExpanded
+                        ? `Collapse ${row.title} configuration`
+                        : `Expand ${row.title} configuration`
+                    }
+                    title={
+                      isExpanded
+                        ? "Collapse configuration"
+                        : "Expand configuration"
+                    }
                   >
-                    {isExpanded
-                      ? "Hide configuration"
-                      : "Configure"}{" "}
-                    {isExpanded ? "⌃" : "⌄"}
+                    <span
+                      className={`dropdown-caret policy-toggle-caret ${
+                        isExpanded ? "is-open" : ""
+                      }`}
+                      aria-hidden="true"
+                    />
                   </button>
                 )}
               </div>
@@ -567,7 +757,8 @@ export default function PolicyBuilder({
               )}
             </div>
           );
-        })}
+          })}
+        </div>
       </section>
 
       <section className="compact-policy-section shared-flow-section">
@@ -620,27 +811,79 @@ export default function PolicyBuilder({
           </button>
         </div>
 
+        <div className="shared-flow-placement">
+          <span>Add to API flow</span>
+          <div className="shared-flow-placement-picker">
+            <button
+              type="button"
+              className="shared-flow-combobox"
+              aria-expanded={isPlacementMenuOpen}
+              aria-haspopup="listbox"
+              onClick={() => {
+                setIsPlacementMenuOpen((open) => !open);
+                setIsFlowMenuOpen(false);
+              }}
+            >
+              <span>{selectedFlowPlacement}</span>
+              <span className="dropdown-caret" aria-hidden="true" />
+            </button>
+
+            {isPlacementMenuOpen && (
+              <div className="shared-flow-menu placement-menu" role="listbox">
+                <div className="shared-flow-options">
+                  {sharedFlowPlacements.map((placement) => (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={selectedFlowPlacement === placement}
+                      key={placement}
+                      onClick={() => chooseFlowPlacement(placement)}
+                    >
+                      {placement}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {config.sharedFlowMode === "existing" ? (
           <div className="shared-flow-existing">
             <label className="shared-flow-select-label">
               Shared Flow in {environment}
-              <div className="shared-flow-select-row">
-                <select
-                  value={selectedExistingFlow}
-                  onChange={(event) =>
-                    setSelectedExistingFlow(event.target.value)
-                  }
+              <div className="shared-flow-select-row shared-flow-picker">
+                <button
+                  type="button"
+                  className="shared-flow-combobox"
+                  aria-expanded={isFlowMenuOpen}
+                  aria-haspopup="listbox"
+                  onClick={() => {
+                    setIsFlowMenuOpen((open) => !open);
+                    setIsPlacementMenuOpen(false);
+                  }}
                 >
-                  <option value="">
-                    Select a Shared Flow
-                  </option>
+                  <span>{selectedExistingFlow || "Select a Shared Flow"}</span>
+                  <span className="dropdown-caret" aria-hidden="true" />
+                </button>
 
-                  {availableSharedFlows.map((flow) => (
-                    <option key={flow} value={flow}>
-                      {flow}
-                    </option>
-                  ))}
-                </select>
+                {isFlowMenuOpen && (
+                  <div className="shared-flow-menu" role="listbox">
+                    <div className="shared-flow-options">
+                      {availableSharedFlows.map((flow) => (
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={selectedExistingFlow === flow}
+                          key={flow}
+                          onClick={() => chooseExistingSharedFlow(flow)}
+                        >
+                          {flow}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="button"
@@ -735,14 +978,18 @@ export default function PolicyBuilder({
             {config.sharedFlows.map((flow) => (
               <div
                 className="selected-shared-flow"
-                key={flow}
+                key={`${flow.name}-${flow.placement}`}
               >
-                <span>{flow}</span>
+                <span>
+                  <strong>{flow.name}</strong>
+                  <small>{flow.placement}</small>
+                  <small>FlowCallout: {flow.calloutPolicyName}</small>
+                </span>
 
                 <button
                   type="button"
                   onClick={() => removeSharedFlow(flow)}
-                  aria-label={`Remove ${flow}`}
+                  aria-label={`Remove ${flow.name} from ${flow.placement}`}
                 >
                   Remove
                 </button>
@@ -765,6 +1012,19 @@ export default function PolicyBuilder({
           selected Apigee environment.
         </p>
       </section>
+      </div>
+
+      <aside className="policy-xml-preview" aria-label="Generated Apigee endpoint XML">
+        <div className="policy-xml-heading">
+          <div>
+            <h3>Generated Endpoint XML</h3>
+            <p>Policy execution order in the Proxy and Target endpoints.</p>
+          </div>
+          <em>{selectedCount} selected</em>
+        </div>
+        <pre><code>{endpointXml}</code></pre>
+      </aside>
+      </div>
     </div>
   );
 }
