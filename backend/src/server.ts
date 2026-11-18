@@ -1,7 +1,5 @@
-import dotenv from "dotenv";
+import "dotenv/config"; // must load before ./app reads process.env
 import app from "./app";
-
-dotenv.config();
 
 const PORT = Number(process.env.PORT) || 5000;
 

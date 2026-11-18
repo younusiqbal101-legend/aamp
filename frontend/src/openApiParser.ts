@@ -131,7 +131,7 @@ export function parseOpenApiSpec(source: string): ParsedOpenApiSpec {
 
   if (!isOpenApi3 && !isSwagger2) {
     throw new Error(
-      'Unsupported specification. This portal currently accepts OpenAPI 3.x or Swagger 2.0 documents.'
+      "Unsupported specification. This portal currently accepts OpenAPI 3.x or Swagger 2.0 documents.",
     );
   }
 
@@ -180,17 +180,24 @@ export function parseOpenApiSpec(source: string): ParsedOpenApiSpec {
       if (operationValue === undefined) continue;
 
       if (!isRecord(operationValue)) {
-        throw new Error(`${method.toUpperCase()} ${path} must be an operation object.`);
+        throw new Error(
+          `${method.toUpperCase()} ${path} must be an operation object.`,
+        );
       }
 
       const upperMethod = method.toUpperCase();
       const operationId = asString(operationValue.operationId);
-      const summary = asString(operationValue.summary) ||
+      const summary =
+        asString(operationValue.summary) ||
         asString(operationValue.description);
 
       const parameters = [
-        ...(Array.isArray(pathItemValue.parameters) ? pathItemValue.parameters : []),
-        ...(Array.isArray(operationValue.parameters) ? operationValue.parameters : []),
+        ...(Array.isArray(pathItemValue.parameters)
+          ? pathItemValue.parameters
+          : []),
+        ...(Array.isArray(operationValue.parameters)
+          ? operationValue.parameters
+          : []),
       ]
         .filter(isRecord)
         .map((parameter) => {
@@ -222,7 +229,9 @@ export function parseOpenApiSpec(source: string): ParsedOpenApiSpec {
         condition,
         enabled: true,
         parameters,
-        hasRequestBody: Boolean(requestBody) || ["POST", "PUT", "PATCH"].includes(upperMethod),
+        hasRequestBody:
+          Boolean(requestBody) ||
+          ["POST", "PUT", "PATCH"].includes(upperMethod),
         responseCodes: responses,
       });
 
@@ -239,7 +248,9 @@ export function parseOpenApiSpec(source: string): ParsedOpenApiSpec {
   }
 
   return {
-    specVersion: isOpenApi3 ? `OpenAPI ${openApiVersion}` : `Swagger ${swaggerVersion}`,
+    specVersion: isOpenApi3
+      ? `OpenAPI ${openApiVersion}`
+      : `Swagger ${swaggerVersion}`,
     title,
     version,
     description,

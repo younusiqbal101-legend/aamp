@@ -1,14 +1,5 @@
-
 import { useEffect, useState } from "react";
-
-type OperationStatus = "PENDING" | "IN_PROGRESS" | "SUCCESS";
-
-type ProvisioningOperation = {
-  id: number;
-  name: string;
-  description: string;
-  status: OperationStatus;
-};
+import { api, type ProvisioningOperation, type RequestStatus } from "./api";
 
 type ProvisioningConsoleProps = {
   requestId: string;
@@ -18,71 +9,8 @@ type ProvisioningConsoleProps = {
   onCreateAnother: () => void;
 };
 
-const initialOperations: ProvisioningOperation[] = [
-  {
-    id: 1,
-    name: "Validate OpenAPI Specification",
-    description: "Checking YAML structure and API definitions",
-    status: "PENDING",
-  },
-  {
-    id: 2,
-    name: "Import API Proxy",
-    description: "Importing the API proxy bundle into Apigee X",
-    status: "PENDING",
-  },
-  {
-    id: 3,
-    name: "Create API Product",
-    description: "Creating or associating the API Product",
-    status: "PENDING",
-  },
-  {
-    id: 4,
-    name: "Register Developer",
-    description: "Creating or reusing the selected Developer",
-    status: "PENDING",
-  },
-  {
-    id: 5,
-    name: "Create Developer App",
-    description: "Creating the application and associating the API Product",
-    status: "PENDING",
-  },
-  {
-    id: 6,
-    name: "Configure Target Server",
-    description: "Creating or reusing the environment Target Server",
-    status: "PENDING",
-  },
-  {
-    id: 7,
-    name: "Configure Shared Flows",
-    description: "Importing or associating the selected Shared Flows",
-    status: "PENDING",
-  },
-  {
-    id: 8,
-    name: "Deploy API Proxy",
-    description: "Deploying the imported proxy revision",
-    status: "PENDING",
-  },
-  {
-    id: 9,
-    name: "Verify Deployment",
-    description: "Checking the deployment result",
-    status: "PENDING",
-  },
-];
-
-function getTime() {
-  return new Date().toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-}
+const POLL_INTERVAL_MS = 1000;
+const MAX_CONSECUTIVE_ERRORS = 5;
 
 export default function ProvisioningConsole({
   requestId,
@@ -91,89 +19,61 @@ export default function ProvisioningConsole({
   onViewRequests,
   onCreateAnother,
 }: ProvisioningConsoleProps) {
-  const [operations, setOperations] =
-    useState<ProvisioningOperation[]>(initialOperations);
-
+  const [operations, setOperations] = useState<ProvisioningOperation[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
-  const [isComplete, setIsComplete] = useState(false);
+  const [status, setStatus] = useState<RequestStatus>("PROVISIONING");
+  const [error, setError] = useState("");
+
+  const isComplete = status === "COMPLETED";
+  const isFailed = status === "FAILED";
+  const isFinished = isComplete || isFailed;
 
   const completedCount = operations.filter(
     (operation) => operation.status === "SUCCESS"
   ).length;
 
-  const progress = Math.round(
-    (completedCount / operations.length) * 100
-  );
+  const progress = operations.length
+    ? Math.round((completedCount / operations.length) * 100)
+    : 0;
 
+  // Poll the backend for the real pipeline state until it finishes.
   useEffect(() => {
-    let currentIndex = 0;
-    let intervalId: number | undefined;
+    let cancelled = false;
+    let timer: number | undefined;
+    let consecutiveErrors = 0;
 
-    setIsComplete(false);
-    setLogs([
-      `[${getTime()}] Provisioning request accepted.`,
-      `[${getTime()}] Starting API provisioning pipeline...`,
-    ]);
+    const poll = async () => {
+      try {
+        const request = await api.getRequest(requestId);
+        if (cancelled) return;
 
-    setOperations(
-      initialOperations.map((operation, index) => ({
-        ...operation,
-        status: index === 0 ? "IN_PROGRESS" : "PENDING",
-      }))
-    );
+        consecutiveErrors = 0;
+        setError("");
+        setOperations(request.operations);
+        setLogs(request.logs);
+        setStatus(request.status);
 
-    intervalId = window.setInterval(() => {
-      if (currentIndex >= initialOperations.length) {
-        if (intervalId !== undefined) {
-          window.clearInterval(intervalId);
+        if (request.status === "COMPLETED" || request.status === "FAILED") {
+          return;
         }
-        return;
+      } catch (err) {
+        if (cancelled) return;
+        consecutiveErrors += 1;
+        setError(
+          err instanceof Error ? err.message : "Unable to load request status."
+        );
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) return;
       }
+      timer = window.setTimeout(poll, POLL_INTERVAL_MS);
+    };
 
-      const completedOperation = initialOperations[currentIndex];
-
-      setOperations((previous) =>
-        previous.map((operation, index) => {
-          if (index === currentIndex) {
-            return { ...operation, status: "SUCCESS" };
-          }
-
-          if (index === currentIndex + 1) {
-            return { ...operation, status: "IN_PROGRESS" };
-          }
-
-          return operation;
-        })
-      );
-
-      setLogs((previous) => [
-        ...previous,
-        `[${getTime()}] SUCCESS: ${completedOperation.name}`,
-      ]);
-
-      currentIndex += 1;
-
-      if (currentIndex === initialOperations.length) {
-        if (intervalId !== undefined) {
-          window.clearInterval(intervalId);
-        }
-
-        setIsComplete(true);
-
-        setLogs((previous) => [
-          ...previous,
-          `[${getTime()}] Pipeline simulation completed.`,
-          `[${getTime()}] All demo operations finished.`,
-        ]);
-      }
-    }, 1800);
+    void poll();
 
     return () => {
-      if (intervalId !== undefined) {
-        window.clearInterval(intervalId);
-      }
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, []);
+  }, [requestId]);
 
   return (
     <div className="provisioning-page">
@@ -189,13 +89,15 @@ export default function ProvisioningConsole({
 
         <span
           className={`pipeline-status ${
-            isComplete ? "status-completed" : "status-running"
+            isFinished ? "status-completed" : "status-running"
           }`}
         >
           <span className="status-dot" />
           {isComplete
-            ? "SIMULATION COMPLETED"
-            : "PROVISIONING IN PROGRESS"}
+            ? "PROVISIONING COMPLETED"
+            : isFailed
+              ? "PROVISIONING FAILED"
+              : "PROVISIONING IN PROGRESS"}
         </span>
       </div>
 
@@ -255,6 +157,8 @@ export default function ProvisioningConsole({
                 )}
 
                 {operation.status === "PENDING" && index + 1}
+
+                {operation.status === "FAILED" && "✕"}
               </div>
 
               <div className="operation-details">
@@ -303,7 +207,7 @@ export default function ProvisioningConsole({
               </div>
             ))}
 
-            {!isComplete && (
+            {!isFinished && (
               <div className="log-line terminal-waiting">
                 <span className="log-prompt">$</span>
                 <span>Waiting for next operation...</span>
@@ -319,11 +223,10 @@ export default function ProvisioningConsole({
           <div className="acknowledgement-icon">✓</div>
 
           <div>
-            <h2>Demo pipeline completed</h2>
+            <h2>Provisioning completed</h2>
             <p>
-              The simulated provisioning sequence has finished.
-              No Apigee resources were created or deployed by
-              this demonstration.
+              The provisioning pipeline for {apiName} has finished
+              successfully in {environment}.
             </p>
           </div>
         </section>
@@ -347,12 +250,11 @@ export default function ProvisioningConsole({
         </button>
       </div>
 
-      <p className="simulation-notice">
-        DEMO MODE · Progress and logs are simulated in the
-        frontend. Actual provisioning will be connected to the
-        backend and Apigee Management API in the next integration
-        phase.
-      </p>
+      {error && (
+        <p className="simulation-notice" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
