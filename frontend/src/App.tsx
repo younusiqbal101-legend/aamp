@@ -1,7 +1,12 @@
 
 import ProvisioningConsole from './ProvisioningConsole';
-import { parseOpenApiSpec, type ParsedOpenApiSpec } from "./openApiParser";
-import { useState, type ReactNode } from "react";
+import { type ParsedOpenApiSpec } from "./openApiParser";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  api as apiClient,
+  type RequestSummary,
+  type ResourceCatalog,
+} from "./api";
 import PolicyBuilder from "./PolicyBuilder";
 import "./App.css";
 
@@ -30,25 +35,25 @@ const steps = [
   "Review & Submit",
 ];
 
-const targets = [
+const fallbackTargets = [
   "shipment-backend",
   "payment-backend",
   "customer-backend",
 ];
 
-const existingProducts = [
+const fallbackProducts = [
   "customer-product",
   "payment-product",
   "shipment-product",
 ];
 
-const existingDevelopers = [
+const fallbackDevelopers = [
   "platform-team@example.com",
   "mobile-partner@example.com",
   "logistics@example.com",
 ];
 
-const existingApps = [
+const fallbackApps = [
   "customer-mobile-app",
   "partner-portal-app",
   "shipment-partner-app",
@@ -139,7 +144,7 @@ export default function App() {
 
   // Target configuration
   const [targetMode, setTargetMode] = useState("existing");
-  const [target, setTarget] = useState(targets[0]);
+  const [target, setTarget] = useState(fallbackTargets[0]);
   const [newTarget, setNewTarget] = useState("shipment-backend-new");
   const [backend, setBackend] = useState(
     "https://shipment.dev.internal.company.com"
@@ -150,7 +155,107 @@ export default function App() {
     {}
   );
 
-  const [requestId, setRequestId] = useState("REQ-1047");
+  const [requestId, setRequestId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [requests, setRequests] = useState<RequestSummary[]>([]);
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [resources, setResources] = useState<ResourceCatalog>({
+    targets: fallbackTargets,
+    products: fallbackProducts,
+    developers: fallbackDevelopers,
+    apps: fallbackApps,
+    sharedFlows: {},
+  });
+
+  // Shadow the module-level fallbacks with data from the backend.
+  const targets = resources.targets;
+  const existingProducts = resources.products;
+  const existingDevelopers = resources.developers;
+  const existingApps = resources.apps;
+
+  // Backend health + catalogue on startup.
+  useEffect(() => {
+    apiClient
+      .health()
+      .then(() => setBackendOnline(true))
+      .catch(() => setBackendOnline(false));
+    apiClient
+      .resources()
+      .then(setResources)
+      .catch(() => {
+        /* keep fallbacks; health indicator shows the problem */
+      });
+  }, []);
+
+  // Refresh request history whenever the page is opened.
+  useEffect(() => {
+    if (page !== "requests") return;
+    apiClient
+      .listRequests()
+      .then(setRequests)
+      .catch((error: unknown) =>
+        setNotice(
+          error instanceof Error ? error.message : "Unable to load requests."
+        )
+      );
+  }, [page]);
+
+  const buildRequestInput = (submitNow: boolean) => ({
+    submit: submitNow,
+    apiName: api,
+    displayName: display,
+    environment: env,
+    basePath,
+    version,
+    description,
+    specFileName: fileName,
+    specContent: yaml,
+    consumer,
+    authType: auth,
+    authConfig:
+      auth === "API Key"
+        ? { header: apiKeyHeader }
+        : auth === "Basic Authentication"
+          ? {
+              verificationEndpoint: basicAuthService,
+              secretReference: basicAuthSecretReference,
+            }
+          : auth === "OAuth 2.0"
+            ? {
+                grant: oauthGrant,
+                scopes: oauthScopes,
+                tokenPath: oauthTokenPath,
+              }
+            : {
+                issuer: jwtIssuer,
+                audience: jwtAudience,
+                algorithm: jwtAlgorithm,
+                jwksUrl,
+              },
+    product:
+      productMode === "new"
+        ? {
+            mode: "new",
+            name: productName,
+            displayName: productDisplayName,
+            description: productDescription,
+          }
+        : { mode: "existing", name: existingProduct },
+    developer:
+      developerMode === "new"
+        ? { mode: "new", name: developerName, email: developerEmail }
+        : { mode: "existing", name: existingDeveloper, email: existingDeveloper },
+    developerApp:
+      appMode === "new"
+        ? { mode: "new", name: appName }
+        : { mode: "existing", name: existingApp },
+    target:
+      targetMode === "new"
+        ? { mode: "new", name: newTarget, url: backend }
+        : { mode: "existing", name: target },
+    policies: policyConfig,
+  });
 
   const field = (
     label: string,
@@ -256,19 +361,35 @@ export default function App() {
     setStep(Math.min(5, step + 1));
   };
 
-  const save = () => {
-    setNotice(
-      "Draft saved in this frontend demo. PostgreSQL integration comes later."
-    );
-    setPage("requests");
+  const save = async () => {
+    setSubmitting(true);
+    try {
+      const created = await apiClient.createRequest(buildRequestInput(false));
+      setNotice(`Draft ${created.id} saved.`);
+      setPage("requests");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Unable to save the draft."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const submit = () => {
-    setRequestId(
-      `REQ-${1048 + Math.floor(Math.random() * 800)}`
-    );
-    setNotice("");
-    setPage("provisioning");
+  const submit = async () => {
+    setSubmitting(true);
+    try {
+      const created = await apiClient.createRequest(buildRequestInput(true));
+      setRequestId(created.id);
+      setNotice("");
+      setPage("provisioning");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Unable to submit the request."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const nav = (label: string, destination: Page) => (
@@ -815,9 +936,11 @@ paths: {}`}
 
                 <button
                   className="primary"
-                  onClick={() => {
+                  disabled={validating || !yaml.trim()}
+                  onClick={async () => {
+                    setValidating(true);
                     try {
-                      const result = parseOpenApiSpec(yaml);
+                      const result = await apiClient.validateSpec(yaml);
                       setParsedSpec(result);
                       setValidationErrors([]);
                       setValid(true);
@@ -836,7 +959,7 @@ paths: {}`}
                       }
 
                       setNotice(
-                        `OpenAPI structure parsed successfully. Found ${result.resources.length} resources and ${result.totalOperations} operations. This is frontend parsing; full standards linting will be performed by the backend.`
+                        `OpenAPI specification validated by the backend. Found ${result.resources.length} resources and ${result.totalOperations} operations.`
                       );
                     } catch (error) {
                       setValid(false);
@@ -844,13 +967,15 @@ paths: {}`}
                       const message =
                         error instanceof Error
                           ? error.message
-                          : "Unable to parse the OpenAPI document.";
+                          : "Unable to validate the OpenAPI document.";
                       setValidationErrors([message]);
-                      setNotice("OpenAPI parsing failed. Correct the errors before continuing.");
+                      setNotice("OpenAPI validation failed. Correct the errors before continuing.");
+                    } finally {
+                      setValidating(false);
                     }
                   }}
                 >
-                  Validate & Lint YAML
+                  {validating ? "Validating…" : "Validate & Lint YAML"}
                 </button>
 
                 {validationErrors.length > 0 && (
@@ -1184,6 +1309,7 @@ paths: {}`}
         {/* STEP 5: POLICIES */}
         {step === 4 && (
           <PolicyBuilder
+            sharedFlowsByEnvironment={resources.sharedFlows}
             environment={env}
             onChange={setPolicyConfig}
           />
@@ -1378,7 +1504,7 @@ paths: {}`}
           </button>
 
           <div>
-            <button className="secondary" onClick={save}>
+            <button className="secondary" onClick={save} disabled={submitting}>
               Save as Draft
             </button>
 
@@ -1387,8 +1513,8 @@ paths: {}`}
                 Next: {steps[step + 1]} →
               </button>
             ) : (
-              <button className="primary" onClick={submit}>
-                Submit Request →
+              <button className="primary" onClick={submit} disabled={submitting}>
+                {submitting ? "Submitting…" : "Submit Request →"}
               </button>
             )}
           </div>
@@ -1462,6 +1588,11 @@ paths: {}`}
 
         <div className="sidebar-bottom">
           <span className="status-light" /> Sandbox workspace
+          {backendOnline === null
+            ? "● Connecting to backend…"
+            : backendOnline
+              ? "● Backend connected"
+              : "● Backend offline"}
         </div>
       </aside>
 
@@ -1597,16 +1728,31 @@ paths: {}`}
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>{requestId}</td>
-                      <td>{api}</td>
-                      <td>Create API</td>
-                      <td>
-                        <em className="badge amber">
-                          Pending Approval
-                        </em>
-                      </td>
-                    </tr>
+                    {requests.length === 0 && (
+                      <tr>
+                        <td colSpan={4}>No requests yet.</td>
+                      </tr>
+                    )}
+                    {requests.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.id}</td>
+                        <td>{item.apiName}</td>
+                        <td>Create API</td>
+                        <td>
+                          <em
+                            className={`badge ${
+                              item.status === "COMPLETED"
+                                ? "green"
+                                : item.status === "FAILED"
+                                  ? "red"
+                                  : "amber"
+                            }`}
+                          >
+                            {item.status}
+                          </em>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
                 <p>{notice}</p>

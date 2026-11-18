@@ -37,12 +37,14 @@ type PolicyConfig = {
 
 type PolicyBuilderProps = {
   environment: string;
+  // Live shared flows per environment from the backend (falls back to the defaults below).
+  sharedFlowsByEnvironment?: Record<string, string[]>;
   onChange: (config: PolicyConfig) => void;
 };
 
 // Temporary environment-specific data for the frontend prototype.
 // The backend will replace this with live Apigee Management API responses.
-const sharedFlowsByEnvironment: Record<string, string[]> = {
+const defaultSharedFlows: Record<string, string[]> = {
   dev: [
     "SF-Common-Logging",
     "SF-Correlation-ID",
@@ -111,6 +113,7 @@ const initialConfig: PolicyConfig = {
 
 export default function PolicyBuilder({
   environment,
+  sharedFlowsByEnvironment,
   onChange,
 }: PolicyBuilderProps) {
   const [config, setConfig] =
@@ -125,7 +128,9 @@ export default function PolicyBuilder({
   }, [config, onChange]);
 
   const availableSharedFlows =
-    sharedFlowsByEnvironment[environment.toLowerCase()] ?? [];
+    sharedFlowsByEnvironment?.[environment.toLowerCase()] ??
+    defaultSharedFlows[environment.toLowerCase()] ??
+    [];
 
   function updatePolicy(
     policy:
