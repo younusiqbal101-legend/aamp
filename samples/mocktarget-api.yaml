@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info:
+  title: Mock Target API
+  version: v1
+  description: Smoke-test API backed by Apigee's public mock service (https://mocktarget.apigee.net).
+servers:
+  - url: https://mocktarget.apigee.net/mock/v1
+paths:
+  /json:
+    get:
+      operationId: getJson
+      summary: Returns a small JSON document
+      responses:
+        "200":
+          description: OK
+  /ip:
+    get:
+      operationId: getIp
+      summary: Returns the caller IP address
+      responses:
+        "200":
+          description: OK
+  /echo:
+    get:
+      operationId: echo
+      summary: Echoes the request back
+      responses:
+        "200":
+          description: OK

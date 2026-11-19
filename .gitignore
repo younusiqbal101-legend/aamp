@@ -158,3 +158,4 @@ vite.config.ts.timestamp-*
 
 # Vite caches in monorepo packages
 **/.vite/
+bundles/

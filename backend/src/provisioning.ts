@@ -1,5 +1,9 @@
+import { loadApigeeConfig } from "./apigee/config";
+import { ApigeeProvider } from "./apigee/provider";
+import { logLine } from "./log";
+import { resources as mockResources } from "./resources";
 import { store } from "./store";
-import type { ProvisioningOperation, ProvisioningRequest } from "./types";
+import { DEFAULT_ENVIRONMENTS, type ProvisioningOperation, type ProvisioningRequest } from "./types";
 
 export const PIPELINE: Omit<ProvisioningOperation, "status">[] = [
   { id: 1, name: "Validate OpenAPI Specification", description: "Checking YAML structure and API definitions" },
@@ -13,31 +17,59 @@ export const PIPELINE: Omit<ProvisioningOperation, "status">[] = [
   { id: 9, name: "Verify Deployment", description: "Checking the deployment result" },
 ];
 
-/**
- * Seam for the real Apigee X integration. Implement this with the Apigee
- * Management API (service-account auth) and swap it in createProvider().
- */
+export interface ResourceCatalog {
+  targets: string[];
+  products: string[];
+  developers: string[];
+  apps: string[];
+  sharedFlows: Record<string, string[]>;
+}
+
 export interface ProvisioningProvider {
   readonly name: string;
   execute(step: number, request: ProvisioningRequest): Promise<void>;
+  /** Live catalogue for the UI dropdowns. */
+  listResources(env: string): Promise<ResourceCatalog>;
+  /** Environment names that exist in the target Apigee org. */
+  listEnvironments(): Promise<string[]>;
+  /** Free any per-request state once the pipeline has ended. */
+  onFinish?(request: ProvisioningRequest): void;
 }
 
 class MockProvider implements ProvisioningProvider {
   readonly name = "mock";
+
   async execute(): Promise<void> {
     const delay = Number(process.env.MOCK_STEP_DELAY_MS) || 1500;
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
+
+  async listResources(): Promise<ResourceCatalog> {
+    return mockResources;
+  }
+
+  async listEnvironments(): Promise<string[]> {
+    return DEFAULT_ENVIRONMENTS;
+  }
 }
 
 function createProvider(): ProvisioningProvider {
-  // PROVISIONING_MODE=apigee will select the real provider once it exists.
-  return new MockProvider();
+  const mode = (process.env.PROVISIONING_MODE || "mock").trim().toLowerCase();
+  if (mode === "mock") return new MockProvider();
+  if (mode === "apigee") return new ApigeeProvider(loadApigeeConfig());
+  throw new Error(`Unknown PROVISIONING_MODE "${mode}". Use "mock" or "apigee".`);
 }
 
-const provider = createProvider();
+export const provider: ProvisioningProvider = createProvider();
 
-const stamp = () => new Date().toISOString().slice(11, 19);
+export function providerInfo() {
+  const apigee = provider instanceof ApigeeProvider ? provider : null;
+  return {
+    mode: provider.name,
+    dryRun: apigee ? apigee.dryRun : null,
+    org: apigee ? apigee.org : null,
+  };
+}
 
 export function newOperations(): ProvisioningOperation[] {
   return PIPELINE.map((op) => ({ ...op, status: "PENDING" as const }));
@@ -46,40 +78,49 @@ export function newOperations(): ProvisioningOperation[] {
 export function startProvisioning(request: ProvisioningRequest): void {
   request.status = "PROVISIONING";
   request.operations = newOperations();
-  request.logs = [
-    `[${stamp()}] Provisioning request accepted.`,
-    `[${stamp()}] Starting API provisioning pipeline (${provider.name} provider)...`,
-  ];
+  request.result = {};
+  request.logs = [];
+  logLine(request, "Provisioning request accepted.");
+  const info = providerInfo();
+  request.provider = { mode: info.mode, dryRun: info.dryRun };
+  logLine(
+    request,
+    info.mode === "apigee"
+      ? `Starting pipeline (apigee provider, org "${info.org}", ${info.dryRun ? "DRY RUN" : "LIVE"}).`
+      : "Starting pipeline (mock provider)."
+  );
   store.save(request);
   void run(request);
 }
 
 async function run(request: ProvisioningRequest): Promise<void> {
-  for (const op of request.operations) {
-    op.status = "IN_PROGRESS";
-    store.save(request);
+  try {
+    for (const op of request.operations) {
+      op.status = "IN_PROGRESS";
+      store.save(request);
 
-    try {
-      await provider.execute(op.id, request);
-      op.status = "SUCCESS";
-      request.logs.push(`[${stamp()}] SUCCESS: ${op.name}`);
-      store.save(request);
-    } catch (error) {
-      op.status = "FAILED";
-      request.status = "FAILED";
-      const detail = error instanceof Error ? error.message : "Unknown error";
-      request.logs.push(`[${stamp()}] FAILED: ${op.name} — ${detail}`);
-      store.save(request);
-      return;
+      try {
+        await provider.execute(op.id, request);
+        op.status = "SUCCESS";
+        logLine(request, `SUCCESS: ${op.name}`);
+        store.save(request);
+      } catch (error) {
+        op.status = "FAILED";
+        request.status = "FAILED";
+        const detail = error instanceof Error ? error.message : "Unknown error";
+        logLine(request, `FAILED: ${op.name} — ${detail}`);
+        store.save(request);
+        return;
+      }
     }
-  }
 
-  request.status = "COMPLETED";
-  request.logs.push(
-    `[${stamp()}] Pipeline completed.`,
-    provider.name === "mock"
-      ? `[${stamp()}] Mock provider: no Apigee resources were created.`
-      : `[${stamp()}] All operations finished.`
-  );
-  store.save(request);
+    request.status = "COMPLETED";
+    logLine(request, "Pipeline completed.");
+    if (provider.name === "mock") {
+      logLine(request, "Mock provider: no Apigee resources were created.");
+    }
+    store.save(request);
+  } finally {
+    provider.onFinish?.(request);
+  }
 }
