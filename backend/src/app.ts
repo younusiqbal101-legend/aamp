@@ -2,11 +2,10 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import helmet from "helmet";
 import { parseOpenApiSpec } from "./openApiParser";
-import { newOperations, startProvisioning } from "./provisioning";
-import { resources } from "./resources";
+import { newOperations, provider, providerInfo, startProvisioning } from "./provisioning";
 import { nextRequestId, store } from "./store";
 import {
-  ENVIRONMENTS,
+  isValidEnvironmentName,
   type Environment,
   type ProvisioningRequest,
   type RequestPayload,
@@ -41,11 +40,30 @@ app.get("/api/health", (_req, res) => {
     success: true,
     message: "Apigee Developer Portal backend is running",
     timestamp: new Date().toISOString(),
+    ...providerInfo(),
   });
 });
 
-app.get("/api/resources", (_req, res) => {
-  res.json({ success: true, data: resources });
+app.get("/api/environments", async (_req, res) => {
+  try {
+    res.json({ success: true, data: await provider.listEnvironments() });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown error";
+    throw new HttpError(502, `Could not load environments: ${detail}`);
+  }
+});
+
+app.get("/api/resources", async (req, res) => {
+  const env = str(req.query.env, "dev");
+  if (!isValidEnvironmentName(env)) {
+    throw new HttpError(400, "env is not a valid environment name.");
+  }
+  try {
+    res.json({ success: true, data: await provider.listResources(env) });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown error";
+    throw new HttpError(502, `Could not load resources: ${detail}`);
+  }
 });
 
 app.post("/api/specs/validate", (req, res) => {
@@ -63,8 +81,8 @@ app.post("/api/specs/validate", (req, res) => {
 
 function toPayload(body: Record<string, unknown>): RequestPayload {
   const environment = str(body.environment) as Environment;
-  if (!ENVIRONMENTS.includes(environment)) {
-    throw new HttpError(400, `environment must be one of: ${ENVIRONMENTS.join(", ")}`);
+  if (!isValidEnvironmentName(environment)) {
+    throw new HttpError(400, "environment is not a valid environment name.");
   }
   const apiName = str(body.apiName).trim();
   if (!/^[a-z0-9][a-z0-9-]*$/.test(apiName)) {
@@ -148,6 +166,7 @@ app.post("/api/requests", (req, res) => {
     payload,
     operations: newOperations(),
     logs: [],
+    result: {},
   };
   store.save(request);
   if (body.submit === true) startProvisioning(request);
