@@ -28,10 +28,33 @@ export interface RequestPayload {
   consumer: string;
   authType: string;
   authConfig: Record<string, unknown>;
-  product: { mode: string; name: string; displayName?: string; description?: string };
+  product: {
+    mode: string;
+    name: string;
+    displayName?: string;
+    description?: string;
+    space?: string;
+    environment?: string;
+    access?: string;
+    approval?: string;
+    apiProxy?: string;
+    resourcePath?: string;
+    methods?: string;
+    quotaLimit?: string;
+    quotaInterval?: string;
+    quotaUnit?: string;
+    oauthScopes?: string;
+  };
   developer: { mode: string; name: string; email: string };
   developerApp: { mode: string; name: string };
-  target: { mode: string; name: string; url?: string };
+  target: {
+    mode: string;
+    name: string;
+    host?: string;
+    port?: string;
+    protocol?: string;
+    sslEnabled?: boolean;
+  };
   policies: Record<string, unknown>;
 }
 

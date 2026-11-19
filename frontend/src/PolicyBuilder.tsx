@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type PolicyDetails = {
   enabled: boolean;
@@ -59,6 +59,8 @@ type PolicyBuilderProps = {
   // Live shared flows per environment from the backend (falls back to the defaults below).
   sharedFlowsByEnvironment?: Record<string, string[]>;
   onChange: (config: PolicyConfig) => void;
+  onEditingChange?: (isEditing: boolean) => void;
+  needsSaveAttention?: boolean;
 };
 
 // Temporary environment-specific data for the frontend prototype.
@@ -249,6 +251,8 @@ export default function PolicyBuilder({
   environment,
   sharedFlowsByEnvironment,
   onChange,
+  onEditingChange,
+  needsSaveAttention = false,
 }: PolicyBuilderProps) {
   const [config, setConfig] =
     useState<PolicyConfig>(initialConfig);
@@ -260,10 +264,41 @@ export default function PolicyBuilder({
     useState<SharedFlowPlacement>("Proxy Endpoint Request PreFlow");
   const [isFlowMenuOpen, setIsFlowMenuOpen] = useState(false);
   const [isPlacementMenuOpen, setIsPlacementMenuOpen] = useState(false);
+  const [isEditingPolicies, setIsEditingPolicies] = useState(false);
+  const [isEditingNewSharedFlow, setIsEditingNewSharedFlow] = useState(false);
+  const sharedFlowSectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     onChange(config);
   }, [config, onChange]);
+
+  useEffect(() => {
+    onEditingChange?.(isEditingPolicies || isEditingNewSharedFlow);
+  }, [isEditingNewSharedFlow, isEditingPolicies, onEditingChange]);
+
+  useEffect(() => {
+    if (!isFlowMenuOpen && !isPlacementMenuOpen) return;
+
+    const closeMenus = (event: MouseEvent) => {
+      if (!sharedFlowSectionRef.current?.contains(event.target as Node)) {
+        setIsFlowMenuOpen(false);
+        setIsPlacementMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFlowMenuOpen(false);
+        setIsPlacementMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeMenus);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeMenus);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isFlowMenuOpen, isPlacementMenuOpen]);
 
   const availableSharedFlows =
     sharedFlowsByEnvironment?.[environment.toLowerCase()] ??
@@ -439,7 +474,7 @@ export default function PolicyBuilder({
   const endpointXml = buildEndpointXml(config);
 
   return (
-    <div className="policy-builder compact-policy-builder">
+    <div className="policy-builder compact-policy-builder" id="policies-editor">
       <div className="policy-builder-heading">
         <div>
           <h2>Step 5: Policies & Shared Flows</h2>
@@ -455,6 +490,10 @@ export default function PolicyBuilder({
         </div>
       </div>
 
+      {(isEditingPolicies || isEditingNewSharedFlow) && needsSaveAttention && (
+        <p className="edit-required-message">Save your policy or Shared Flow changes before continuing.</p>
+      )}
+
       <div className="policy-workspace">
       <div className="policy-editor">
       <section className="compact-policy-section">
@@ -463,8 +502,16 @@ export default function PolicyBuilder({
             <h3>Available Policies</h3>
             <p>{selectedCount} policies selected</p>
           </div>
+          <button
+            type="button"
+            className="edit-button"
+            onClick={() => setIsEditingPolicies((editing) => !editing)}
+          >
+            {isEditingPolicies ? "Save" : "Edit"}
+          </button>
         </div>
 
+        <fieldset className="policy-edit-fields" disabled={!isEditingPolicies}>
         <div className="compact-policy-grid">
           {policyRows.map((row) => {
           const policy = config[row.key];
@@ -759,9 +806,10 @@ export default function PolicyBuilder({
           );
           })}
         </div>
+        </fieldset>
       </section>
 
-      <section className="compact-policy-section shared-flow-section">
+      <section className="compact-policy-section shared-flow-section" ref={sharedFlowSectionRef}>
         <div className="compact-section-title">
           <div>
             <h3>Shared Flows</h3>
@@ -906,7 +954,18 @@ export default function PolicyBuilder({
           </div>
         ) : (
           <div className="shared-flow-create">
-            <div className="compact-policy-identity">
+            <div className="section-title-row">
+              <h4>New Shared Flow</h4>
+              <button
+                type="button"
+                className="edit-button"
+                onClick={() => setIsEditingNewSharedFlow((editing) => !editing)}
+              >
+                {isEditingNewSharedFlow ? "Save" : "Edit"}
+              </button>
+            </div>
+            <fieldset className="policy-edit-fields" disabled={!isEditingNewSharedFlow}>
+              <div className="compact-policy-identity">
               <label>
                 Shared Flow name *
                 <input
@@ -966,6 +1025,7 @@ export default function PolicyBuilder({
             >
               Add New Shared Flow to Request
             </button>
+            </fieldset>
           </div>
         )}
 
