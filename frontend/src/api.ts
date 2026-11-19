@@ -28,7 +28,7 @@ export type ProvisioningResult = {
 };
 
 export type ProviderInfo = {
-  mode: string; // "mock" | "apigee"
+  mode: "apigee";
   dryRun: boolean | null;
 };
 

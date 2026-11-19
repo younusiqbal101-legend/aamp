@@ -2901,6 +2901,8 @@ th { background: #e5ecf6; color: var(--cloud-navy); font-weight: 600; } td, th {
   border-radius: 0 16px 16px 0;
   padding-top: 12px;
   padding-bottom: 16px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .sidebar .nav,
 .sidebar .subnav {
@@ -2989,6 +2991,7 @@ th { background: #e5ecf6; color: var(--cloud-navy); font-weight: 600; } td, th {
 
 /* Top-bar account controls */
 .top-right { position: relative; gap: 10px; }
+.legacy-header-status { display: none; }
 .top-right .avatar,
 .top-right .toolbar-icon {
   width: 36px;
