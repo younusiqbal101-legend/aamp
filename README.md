@@ -75,6 +75,23 @@ one conditional flow per OpenAPI operation, a 404 catch-all for everything else,
 5. **Go live**: set `APIGEE_DRY_RUN=false`, restart the backend, and submit again. The final card shows the
    revision, the API key and a ready-to-run `curl`.
 
+### Which mode is the backend really in?
+
+When the backend starts it prints a banner:
+
+```
+Backend running on http://localhost:5000
+  .env file : C:\...\aamp\backend\.env (loaded)
+  Mode      : APIGEE, org "my-project", DRY RUN (nothing is sent to Apigee)
+```
+
+You can also open <http://localhost:5000/api/health> in a browser: `"mode"` must be `"apigee"` (not `"mock"`).
+If the UI still says **Mock backend**:
+
+- `.env` must be named exactly `.env` (not `.env.txt`) and live in the `backend/` folder. The banner shows which file was loaded, or `NOT FOUND`.
+- Another backend may still be running on port 5000. The new one now refuses to start and tells you; close the old terminal first.
+- `npm run dev` restarts automatically when `.env` changes. If you started the server another way, restart it yourself.
+
 ### Smoke test with Apigee's public mock service
 
 Use `samples/mocktarget-api.yaml`, keep the base path `/mock/v1` (Step 2), choose API Key auth, and in Step 4 create a

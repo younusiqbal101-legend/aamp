@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --import tsx --test test/*.test.ts",
-    "dev": "tsx watch src/server.ts",
+    "predev": "node -e \"const fs=require('fs');if(!fs.existsSync('.env'))fs.copyFileSync('.env.example','.env')\"",
+    "dev": "node --import tsx --watch-path=./src --watch-path=./.env src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit"
