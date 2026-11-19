@@ -1,9 +1,6 @@
 export type OperationStatus = "PENDING" | "IN_PROGRESS" | "SUCCESS" | "FAILED";
 export type RequestStatus = "DRAFT" | "PROVISIONING" | "COMPLETED" | "FAILED";
 
-/** Environments offered when Apigee is not queried (mock / dry run). */
-export const DEFAULT_ENVIRONMENTS = ["dev", "test", "stage", "prod"];
-
 /** Real environment names come from the Apigee org (e.g. "eval"), so any valid name is accepted. */
 export type Environment = string;
 export const isValidEnvironmentName = (name: string): boolean =>

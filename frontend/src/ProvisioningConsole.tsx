@@ -275,15 +275,7 @@ export default function ProvisioningConsole({
                   </p>
                 )}
               </>
-            ) : (
-              <>
-                <h2>Mock pipeline completed</h2>
-                <p>
-                  The backend is running in mock mode, so no Apigee
-                  resources were created or deployed.
-                </p>
-              </>
-            )}
+            ) : null}
           </div>
         </section>
       )}

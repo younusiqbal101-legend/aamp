@@ -283,15 +283,6 @@ export async function buildProxyBundle(
 
   /* Target endpoint: always through a Target Server (created in step 6) */
   const targetName = payload.target.name;
-  let targetPath = "";
-  if (payload.target.mode === "new" && payload.target.url) {
-    try {
-      const pathname = new URL(payload.target.url).pathname.replace(/\/+$/, "");
-      if (pathname) targetPath = pathname;
-    } catch {
-      /* validated earlier by the provider */
-    }
-  }
   const targetEndpoint =
     XML_HEADER +
     `<TargetEndpoint name="default">` +
@@ -299,7 +290,6 @@ export async function buildProxyBundle(
     `<Flows/>` +
     `<PostFlow name="PostFlow">${stepsXml("Request", loc.targetReqPost)}${stepsXml("Response", loc.targetResPost)}</PostFlow>` +
     `<HTTPTargetConnection><LoadBalancer><Server name="${esc(targetName)}"/></LoadBalancer>` +
-    (targetPath ? `<Path>${esc(targetPath)}</Path>` : "") +
     `</HTTPTargetConnection></TargetEndpoint>`;
 
   const descriptor =

@@ -8,7 +8,7 @@ backend/    Express + TypeScript       (http://localhost:5000, proxied by Vite u
 samples/    Sample OpenAPI files for testing
 ```
 
-## Quick start (mock mode, no Apigee needed)
+## Quick start
 
 ```bash
 cd backend  && npm install && cp .env.example .env && npm run dev     # Windows: copy .env.example .env
@@ -21,7 +21,7 @@ and click through the six steps. The sidebar/top bar shows which mode the backen
 ## Tests
 
 ```bash
-cd backend && npm test          # API happy path (mock, Apigee dry run, and a fake Apigee server)
+cd backend && npm test          # Apigee provider tests
 
 # Browser happy path: upload swagger -> every wizard step -> submit -> provisioning completes
 # (backend and frontend must be running)
@@ -31,13 +31,12 @@ npm run e2e                                      # HEADED=1 npm run e2e to watch
 
 ## Provisioning to a real Apigee X organization
 
-The backend has two providers, chosen with `PROVISIONING_MODE` in `backend/.env`:
+The backend uses the Apigee provider, configured through `backend/.env`:
 
-| Mode | What happens on **Submit Request** |
+| Setting | What happens on **Submit Request** |
 | --- | --- |
-| `mock` | The 9 steps are simulated. Nothing is created anywhere. |
-| `apigee`, `APIGEE_DRY_RUN=true` | The proxy bundle is generated and validated and saved to `backend/bundles/*.zip`. **No call is made to Apigee.** |
-| `apigee`, `APIGEE_DRY_RUN=false` | Resources are created / updated in your Apigee org (see below). |
+| `APIGEE_DRY_RUN=true` | The proxy bundle is generated and validated and saved to `backend/bundles/*.zip`. **No resources are created or updated.** |
+| `APIGEE_DRY_RUN=false` | Resources are created / updated in your Apigee organization (see below). |
 
 ### What the 9 steps do against Apigee
 
@@ -78,7 +77,7 @@ one conditional flow per OpenAPI operation, a 404 catch-all for everything else,
 ### Environment names
 
 The Environment dropdown shows the environments that really exist in your Apigee organization (for example an
-evaluation org only has `eval`), read live from Apigee. In mock and dry-run mode it offers `dev`, `test`, `stage`, `prod`.
+evaluation org only has `eval`), read live from Apigee.
 If you submit an environment that does not exist, step 1 fails and lists the available ones.
 
 ### Which mode is the backend really in?
@@ -91,21 +90,12 @@ Backend running on http://localhost:5000
   Mode      : APIGEE, org "my-project", DRY RUN (nothing is sent to Apigee)
 ```
 
-You can also open <http://localhost:5000/api/health> in a browser: `"mode"` must be `"apigee"` (not `"mock"`).
-If the UI still says **Mock backend**:
+You can also open <http://localhost:5000/api/health> in a browser: `"mode"` is `"apigee"`.
+If the UI cannot connect to the backend:
 
 - `.env` must be named exactly `.env` (not `.env.txt`) and live in the `backend/` folder. The banner shows which file was loaded, or `NOT FOUND`.
 - Another backend may still be running on port 5000. The new one now refuses to start and tells you; close the old terminal first.
 - `npm run dev` restarts automatically when `.env` changes. If you started the server another way, restart it yourself.
-
-### Smoke test with Apigee's public mock service
-
-Use `samples/mocktarget-api.yaml`, keep the base path `/mock/v1` (Step 2), choose API Key auth, and in Step 4 create a
-new target server `mocktarget` with backend URL `https://mocktarget.apigee.net`. After deployment:
-
-```bash
-curl -H "x-api-key: <consumer key from the final card>" https://<APIGEE_RUNTIME_HOST>/mock/v1/json
-```
 
 ### Current limits (real provisioning)
 

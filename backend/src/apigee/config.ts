@@ -26,8 +26,7 @@ export function loadApigeeConfig(env = process.env): ApigeeConfig {
   }
   return {
     org,
-    // Safe default: anything other than an explicit "false" is a dry run.
-    dryRun: (env.APIGEE_DRY_RUN ?? "true").trim().toLowerCase() !== "false",
+    dryRun: (env.APIGEE_DRY_RUN ?? "false").trim().toLowerCase() === "true",
     accessToken: env.APIGEE_ACCESS_TOKEN?.trim() || undefined,
     deployServiceAccount: env.APIGEE_DEPLOY_SERVICE_ACCOUNT?.trim() || undefined,
     runtimeHost: env.APIGEE_RUNTIME_HOST?.trim() || undefined,

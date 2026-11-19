@@ -73,30 +73,6 @@ const steps = [
 
 const unsavedChangesMessage = "Save your changes before continuing.";
 
-const fallbackTargets = [
-  "shipment-backend",
-  "payment-backend",
-  "customer-backend",
-];
-
-const fallbackProducts = [
-  "customer-product",
-  "payment-product",
-  "shipment-product",
-];
-
-const fallbackDevelopers = [
-  "platform-team@example.com",
-  "mobile-partner@example.com",
-  "logistics@example.com",
-];
-
-const fallbackApps = [
-  "customer-mobile-app",
-  "partner-portal-app",
-  "shipment-partner-app",
-];
-
 export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [step, setStep] = useState(0);
@@ -143,24 +119,17 @@ export default function App() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // API details
-  const [api, setApi] = useState("shipment-api");
-  const [display, setDisplay] = useState("Shipment API");
-  const [basePath, setBasePath] = useState("/shipment/v1");
-  const [version, setVersion] = useState("v1");
-  const [description, setDescription] = useState(
-    "APIs to manage shipment operations."
-  );
-  const [env, setEnv] = useState("dev");
+  const [api, setApi] = useState("");
+  const [display, setDisplay] = useState("");
+  const [basePath, setBasePath] = useState("");
+  const [version, setVersion] = useState("");
+  const [description, setDescription] = useState("");
+  const [env, setEnv] = useState("");
   // Real environment names come from the backend (Apigee orgs are not always dev/test/stage/prod).
   const [environmentsLoaded, setEnvironmentsLoaded] = useState(false);
-  const [environments, setEnvironments] = useState([
-    "dev",
-    "test",
-    "stage",
-    "prod",
-  ]);
-  const [owningTeam, setOwningTeam] = useState("Platform APIs");
-  const [contactEmail, setContactEmail] = useState("api-platform@company.com");
+  const [environments, setEnvironments] = useState<string[]>([]);
+  const [owningTeam, setOwningTeam] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [isEditingOperations, setIsEditingOperations] = useState(false);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
@@ -177,47 +146,33 @@ export default function App() {
   const [apiKeyHeader, setApiKeyHeader] = useState("x-api-key");
 
   // Basic Authentication configuration
-  const [basicAuthService, setBasicAuthService] = useState(
-    "https://identity.internal.company.com/verify"
-  );
-  const [basicAuthSecretReference, setBasicAuthSecretReference] =
-    useState("basic-auth-credentials");
+  const [basicAuthService, setBasicAuthService] = useState("");
+  const [basicAuthSecretReference, setBasicAuthSecretReference] = useState("");
 
   // OAuth configuration
   const [oauthGrant, setOauthGrant] = useState("Client Credentials");
-  const [oauthScopes, setOauthScopes] = useState(
-    "shipment.read shipment.write"
-  );
+  const [oauthScopes, setOauthScopes] = useState("");
   const [oauthTokenPath, setOauthTokenPath] = useState(
     "/oauth/token"
   );
 
   // JWT configuration
-  const [jwtIssuer, setJwtIssuer] = useState(
-    "https://identity.example.com"
-  );
-  const [jwtAudience, setJwtAudience] = useState("shipment-api");
+  const [jwtIssuer, setJwtIssuer] = useState("");
+  const [jwtAudience, setJwtAudience] = useState("");
   const [jwtAlgorithm, setJwtAlgorithm] = useState("RS256");
-  const [jwksUrl, setJwksUrl] = useState(
-    "https://identity.example.com/.well-known/jwks.json"
-  );
+  const [jwksUrl, setJwksUrl] = useState("");
 
   // API Product
   const [productMode, setProductMode] = useState("new");
-  const [productName, setProductName] = useState("shipment-product");
-  const [productDisplayName, setProductDisplayName] = useState(
-    "Shipment API Product"
-  );
-  const [existingProduct, setExistingProduct] =
-    useState("customer-product");
-  const [productDescription, setProductDescription] = useState(
-    "Access product for Shipment API."
-  );
-  const [productSpace, setProductSpace] = useState("Default");
-  const [productEnvironment, setProductEnvironment] = useState("dev");
+  const [productName, setProductName] = useState("");
+  const [productDisplayName, setProductDisplayName] = useState("");
+  const [existingProduct, setExistingProduct] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [productSpace, setProductSpace] = useState("");
+  const [productEnvironment, setProductEnvironment] = useState("");
   const [productAccess, setProductAccess] = useState("Private");
   const [productApproval, setProductApproval] = useState("Automatic");
-  const [productProxy, setProductProxy] = useState("shipment-api");
+  const [productProxy, setProductProxy] = useState("");
   const [productResourcePath, setProductResourcePath] = useState("/**");
   const [productMethods, setProductMethods] = useState("GET, POST");
   const [productQuotaLimit, setProductQuotaLimit] = useState("1000");
@@ -227,24 +182,20 @@ export default function App() {
 
   // Developer
   const [developerMode, setDeveloperMode] = useState("new");
-  const [developerName, setDeveloperName] =
-    useState("logistics-partner");
-  const [developerEmail, setDeveloperEmail] =
-    useState("logistics@example.com");
-  const [existingDeveloper, setExistingDeveloper] =
-    useState("platform-team@example.com");
+  const [developerName, setDeveloperName] = useState("");
+  const [developerEmail, setDeveloperEmail] = useState("");
+  const [existingDeveloper, setExistingDeveloper] = useState("");
 
   // Developer App
   const [appMode, setAppMode] = useState("new");
-  const [appName, setAppName] = useState("shipment-partner-app");
-  const [existingApp, setExistingApp] =
-    useState("customer-mobile-app");
+  const [appName, setAppName] = useState("");
+  const [existingApp, setExistingApp] = useState("");
 
   // Target configuration
   const [targetMode, setTargetMode] = useState("existing");
-  const [target, setTarget] = useState(fallbackTargets[0]);
-  const [newTarget, setNewTarget] = useState("shipment-backend-new");
-  const [backend, setBackend] = useState("shipment.dev.internal.company.com");
+  const [target, setTarget] = useState("");
+  const [newTarget, setNewTarget] = useState("");
+  const [backend, setBackend] = useState("");
   const [targetPort, setTargetPort] = useState("443");
   const [targetProtocol, setTargetProtocol] = useState("HTTPS");
   const [targetSsl, setTargetSsl] = useState(true);
@@ -261,14 +212,13 @@ export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [backendInfo, setBackendInfo] = useState<BackendHealth | null>(null);
   const [resources, setResources] = useState<ResourceCatalog>({
-    targets: fallbackTargets,
-    products: fallbackProducts,
-    developers: fallbackDevelopers,
-    apps: fallbackApps,
+    targets: [],
+    products: [],
+    developers: [],
+    apps: [],
     sharedFlows: {},
   });
 
-  // Shadow the module-level fallbacks with data from the backend.
   const targets = resources.targets;
   const existingProducts = resources.products;
   const existingDevelopers = resources.developers;
@@ -292,8 +242,8 @@ export default function App() {
       .then((list) => {
         if (list.length === 0) return;
         setEnvironments(list);
-        // Switch away from a default that does not exist (e.g. "dev" in an org that only has "eval").
         setEnv((current) => (list.includes(current) ? current : list[0]));
+        setProductEnvironment((current) => (list.includes(current) ? current : list[0]));
       })
       .catch((error: unknown) =>
         setNotice(
@@ -311,18 +261,14 @@ export default function App() {
       .resources(env)
       .then(setResources)
       .catch((error: unknown) => {
-        // Keep the built-in fallback lists, but tell the user why they are stale.
-        setNotice(
-          error instanceof Error
-            ? error.message
-            : "Could not load Apigee resources."
-        );
+        setResources({ targets: [], products: [], developers: [], apps: [], sharedFlows: {} });
+        setNotice(error instanceof Error ? error.message : "Could not load Apigee resources.");
       });
   }, [env, environmentsLoaded]);
 
   // Refresh request history whenever the page is opened.
   useEffect(() => {
-    if (page !== "requests") return;
+    if (page !== "requests" && page !== "approve" && page !== "home") return;
     apiClient
       .listRequests()
       .then(setRequests)
@@ -588,31 +534,32 @@ export default function App() {
     </button>
   );
 
-  const apiCatalog = [
-    { name: "Customer API", proxy: "customer-api", owner: "Customer Platform", revision: "r12", environment: "prod", status: "Healthy", description: "Customer profiles, preferences and account services." },
-    { name: "Payments API", proxy: "payments-api", owner: "Commerce Platform", revision: "r8", environment: "prod", status: "Healthy", description: "Secure payment initiation and transaction status." },
-    { name: "Shipment API", proxy: "shipment-api", owner: "Logistics", revision: "r4", environment: "test", status: "Review needed", description: "Shipment creation, tracking and carrier operations." },
-  ];
+  const apiCatalog = existingProducts.map((name) => ({
+    name,
+    environment: env,
+    owner: "Not available",
+    revision: "Not available",
+  }));
 
   function renderCatalog() {
     const visibleApis = apiCatalog.filter((item) =>
-      `${item.name} ${item.proxy} ${item.owner}`.toLowerCase().includes(catalogQuery.toLowerCase())
+      item.name.toLowerCase().includes(catalogQuery.toLowerCase())
     );
 
     return <>
-      {title("API catalog", "Discover managed APIs, deployment health and ownership across your Apigee organization.")}
+      {title("API catalog", "Browse API products available in your Apigee organization.")}
       <section className="catalog-toolbar">
         <label className="catalog-search">
           <span>Search APIs</span>
-          <input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search by API, proxy or owner" />
+          <input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search API products" />
         </label>
         <button className="secondary" onClick={() => setCatalogQuery("")}>Clear filters</button>
         <button className="primary" onClick={goCreate}>+ Create API</button>
       </section>
       <div className="api-catalog-grid">
-        {visibleApis.map((item) => <article className="api-card" key={item.proxy}>
-          <div className="api-card-top"><span className="api-mark">API</span><em className={`badge ${item.status === "Healthy" ? "green" : "amber"}`}>{item.status}</em></div>
-          <h2>{item.name}</h2><code>{item.proxy}</code><p>{item.description}</p>
+        {visibleApis.map((item) => <article className="api-card" key={item.name}>
+          <div className="api-card-top"><span className="api-mark">PRODUCT</span><em className="badge green">Available</em></div>
+          <h2>{item.name}</h2><code>{item.name}</code><p>API product returned by the connected Apigee organization.</p>
           <dl><dt>Owner</dt><dd>{item.owner}</dd><dt>Deployment</dt><dd>{item.environment} · {item.revision}</dd></dl>
           <div className="api-card-actions"><button className="secondary" onClick={() => setPage("resources")}>View details</button><button className="text-button" onClick={() => setPage("publish")}>Deploy</button></div>
         </article>)}
@@ -1216,7 +1163,7 @@ export default function App() {
                 )}
 
                 <label className="field">
-                  <span>Or paste YAML for this UI demo</span>
+                  <span>Or paste OpenAPI YAML</span>
                   <textarea
                     rows={7}
                     value={yaml}
@@ -1833,11 +1780,9 @@ paths: {}`}
                 </ol>
 
                 <div className="callout warn">
-                  {backendInfo?.mode === "apigee"
-                    ? backendInfo.dryRun
-                      ? "Dry run: the proxy bundle is generated and saved by the backend, but nothing is created or changed in Apigee."
-                      : `Live: submitting creates or updates resources in Apigee organization "${backendInfo.org}" (${env}).`
-                    : "Mock mode: submission simulates provisioning. No Apigee resources are created."}
+                  {backendInfo?.dryRun
+                    ? "Dry run: the proxy bundle is generated and saved by the backend, but nothing is created or changed in Apigee."
+                    : `Live: submitting creates or updates resources in Apigee organization "${backendInfo?.org}" (${env}).`}
                 </div>
               </>,
               "aside"
@@ -1907,6 +1852,14 @@ paths: {}`}
         </div>
 
         <div className="top-right" ref={topMenuRef}>
+          <span className="connection">
+            <i aria-hidden="true" />
+            {backendInfo?.mode === "apigee"
+              ? `Apigee ${backendInfo.org}${backendInfo.dryRun ? " (dry run)" : ""}`
+              : backendOnline === false
+                ? "Backend offline"
+                : "Backend connected"}
+          </span>
           <button
             type="button"
             className="toolbar-icon"
@@ -1944,14 +1897,14 @@ paths: {}`}
 
           {openTopMenu === "notifications" && (
             <section className="top-menu notifications-menu" aria-label="Notifications">
-              <div className="top-menu-heading"><strong>Notifications</strong><span>2 new</span></div>
+              <div className="top-menu-heading"><strong>Notifications</strong><span>{requests.length} recent</span></div>
               <button type="button" className="notification-item" onClick={() => setOpenTopMenu(null)}>
-                <b>Request REQ-1044 is ready for review</b>
-                <small>Shipment API · 10 minutes ago</small>
+                <b>Open My Requests to see live request updates</b>
+                <small>Updates are supplied by the backend.</small>
               </button>
               <button type="button" className="notification-item" onClick={() => setOpenTopMenu(null)}>
-                <b>Payment API was published to dev</b>
-                <small>Deployment completed · 1 hour ago</small>
+                <b>No static notifications are shown</b>
+                <small>Live notifications will appear here when available.</small>
               </button>
               <button type="button" className="view-all-notifications" onClick={() => setOpenTopMenu(null)}>View all notifications</button>
             </section>
@@ -1969,18 +1922,15 @@ paths: {}`}
             </section>
           )}
         </div>
-        <div className="top-right">
+        <div className="legacy-header-status">
           <span className="connection">
             <i />{" "}
             {backendInfo?.mode === "apigee"
               ? `Apigee ${backendInfo.org}${backendInfo.dryRun ? " · dry run" : ""}`
               : backendOnline === false
                 ? "Backend offline"
-                : "Mock backend"}
+                : "Connecting to backend"}
           </span>
-          <span>Environment: {env}</span>
-          <span className="avatar">JD</span>
-          <span>Developer</span>
         </div>
       </header>
 
@@ -2024,14 +1974,6 @@ paths: {}`}
           ◷ Shared Flows
         </button>
 
-        <div className="sidebar-bottom">
-          <span className="status-light" /> Sandbox workspace{" "}
-          {backendOnline === null
-            ? "● Connecting to backend…"
-            : backendOnline
-              ? "● Backend connected"
-              : "● Backend offline"}
-        </div>
       </aside>
 
       <main>
@@ -2113,10 +2055,10 @@ paths: {}`}
               </div>
 
               <div className="metrics-grid">
-                <div className="metric"><span>Managed APIs</span><strong>12</strong><small>+2 this month</small></div>
-                <div className="metric"><span>Healthy deployments</span><strong>18</strong><small>Across 4 environments</small></div>
-                <div className="metric"><span>Pending approval</span><strong>03</strong><small>Needs your review</small></div>
-                <div className="metric"><span>Policy compliance</span><strong>96%</strong><small>+4% from last week</small></div>
+                <div className="metric"><span>API Products</span><strong>{existingProducts.length}</strong><small>Available in Apigee</small></div>
+                <div className="metric"><span>Target Servers</span><strong>{targets.length}</strong><small>Available in {env || "the selected environment"}</small></div>
+                <div className="metric"><span>Requests in progress</span><strong>{requests.filter((item) => item.status === "PROVISIONING").length}</strong><small>Live provisioning status</small></div>
+                <div className="metric"><span>Pending drafts</span><strong>{requests.filter((item) => item.status === "DRAFT").length}</strong><small>Awaiting submission</small></div>
               </div>
             </section>
 
@@ -2135,24 +2077,15 @@ paths: {}`}
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>REQ-1046</td>
-                      <td>customer-api</td>
-                      <td>Create API</td>
-                      <td>
-                        <em className="badge green">Completed</em>
-                      </td>
-                      <td>dev</td>
-                    </tr>
-                    <tr>
-                      <td>REQ-1045</td>
-                      <td>payment-api</td>
-                      <td>Create API</td>
-                      <td>
-                        <em className="badge amber">In Progress</em>
-                      </td>
-                      <td>test</td>
-                    </tr>
+                    {requests.length === 0 ? (
+                      <tr><td colSpan={5}>No requests yet.</td></tr>
+                    ) : requests.slice(0, 5).map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.id}</td><td>{item.apiName}</td><td>Create API</td>
+                        <td><em className={`badge ${item.status === "COMPLETED" ? "green" : item.status === "FAILED" ? "red" : "amber"}`}>{item.status}</em></td>
+                        <td>{item.environment}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </>
@@ -2214,17 +2147,16 @@ paths: {}`}
           <>
             {title(
               "Access / Read Only",
-              "Browse existing Apigee resources. Demo data until backend integration."
+              "Browse resources currently available in Apigee."
             )}
 
             <div className="resource-grid">
               {[
-                ["API Proxies", "12"],
-                ["API Products", "8"],
-                ["Developers", "24"],
-                ["Developer Apps", "31"],
-                ["Target Servers", "6"],
-                ["Shared Flows", "4"],
+                ["API Products", String(existingProducts.length)],
+                ["Developers", String(existingDevelopers.length)],
+                ["Developer Apps", String(existingApps.length)],
+                ["Target Servers", String(targets.length)],
+                ["Shared Flows", String(resources.sharedFlows[env]?.length ?? 0)],
               ].map((item) =>
                 panel(
                   <>
@@ -2252,12 +2184,10 @@ paths: {}`}
 
                 {select(
                   "API Proxy",
-                  "customer-api",
+                  existingProducts[0] ?? "",
                   () => {},
-                  ["customer-api", "payment-api", "shipment-api"]
+                  existingProducts
                 )}
-
-                {select("Revision", "3", () => {}, ["3", "2", "1"])}
 
                 {select(
                   "Target Environment",
@@ -2270,7 +2200,7 @@ paths: {}`}
                   className="primary"
                   onClick={() =>
                     setNotice(
-                      "Demo publish request prepared; no deployment performed."
+                      "Publishing is handled by the live provisioning workflow after an onboarding request is submitted."
                     )
                   }
                 >
@@ -2303,23 +2233,24 @@ paths: {}`}
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>REQ-1044</td>
-                      <td>shipment-api</td>
-                      <td>logistics-team</td>
+                    {requests.filter((item) => item.status === "DRAFT").length === 0 && (
+                      <tr><td colSpan={4}>No requests are awaiting review.</td></tr>
+                    )}
+                    {requests.filter((item) => item.status === "DRAFT").map((item) => (
+                      <tr key={item.id}>
+                      <td>{item.id}</td>
+                      <td>{item.apiName}</td>
+                      <td>—</td>
                       <td>
                         <button
                           className="primary"
-                          onClick={() =>
-                            setNotice(
-                              "Demo approval recorded; backend workflow not connected."
-                            )
-                          }
+                          onClick={() => setPage("requests")}
                         >
-                          Review / Approve
+                          View Request
                         </button>
                       </td>
                     </tr>
+                    ))}
                   </tbody>
                 </table>
 

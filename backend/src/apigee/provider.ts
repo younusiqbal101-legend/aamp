@@ -1,15 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { logLine } from "../log";
-import { resources as mockResources } from "../resources";
 import type { ProvisioningProvider, ResourceCatalog } from "../provisioning";
-import { DEFAULT_ENVIRONMENTS, type ProvisioningRequest } from "../types";
+import { type ProvisioningRequest } from "../types";
 import { buildProxyBundle, SUPPORTED_AUTH, type BuiltBundle } from "./bundle";
 import { ApigeeClient, ApigeeError, enc } from "./client";
 import type { ApigeeConfig } from "./config";
 
 const NAME_RE = /^[A-Za-z0-9._-]+$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const HOST_RE = /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9][A-Za-z0-9-]{0,61}[A-Za-z0-9]$/;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const names = (list: unknown, key: string): string[] =>
@@ -60,14 +60,11 @@ export class ApigeeProvider implements ProvisioningProvider {
   /* ---------------- live catalogue for the UI dropdowns ---------------- */
 
   async listEnvironments(): Promise<string[]> {
-    if (this.dryRun) return DEFAULT_ENVIRONMENTS;
     const { data } = await this.client.call("GET", `${this.orgPath()}/environments`);
     return names(data, "name");
   }
 
   async listResources(env: string): Promise<ResourceCatalog> {
-    // Dry run needs no credentials, so dropdowns use the built-in sample lists.
-    if (this.dryRun) return mockResources;
     const org = this.orgPath();
     const [products, developers, apps, targets, flows] = await Promise.all([
       this.client.call("GET", `${org}/apiproducts`),
@@ -102,12 +99,9 @@ export class ApigeeProvider implements ProvisioningProvider {
     if (!NAME_RE.test(p.developerApp.name)) problems.push("developer app name is missing or has invalid characters");
     if (!NAME_RE.test(p.target.name)) problems.push("target server name is missing or has invalid characters");
     if (p.target.mode === "new") {
-      try {
-        const url = new URL(p.target.url ?? "");
-        if (!/^https?:$/.test(url.protocol)) throw new Error();
-      } catch {
-        problems.push("backend URL must be a valid http(s) URL");
-      }
+      if (!HOST_RE.test(p.target.host ?? "")) problems.push("target host must be a valid hostname without a protocol or path");
+      const port = Number(p.target.port);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) problems.push("target port must be between 1 and 65535");
     }
     if (problems.length) throw new Error(`Invalid request: ${problems.join("; ")}.`);
 
@@ -271,18 +265,16 @@ export class ApigeeProvider implements ProvisioningProvider {
     if (found.status !== 404) return logLine(req, `Target server "${target.name}" exists in "${env}"; reusing it.`);
     if (target.mode === "existing") throw new Error(`Target server "${target.name}" does not exist in "${env}".`);
 
-    const url = new URL(target.url ?? "");
-    const https = url.protocol === "https:";
     await this.client.call("POST", base, {
       json: {
         name: target.name,
-        host: url.hostname,
-        port: Number(url.port) || (https ? 443 : 80),
+        host: target.host,
+        port: Number(target.port),
         isEnabled: true,
-        sSLInfo: { enabled: https },
+        sSLInfo: { enabled: target.sslEnabled },
       },
     });
-    logLine(req, `Created target server "${target.name}" → ${url.hostname}.`);
+    logLine(req, `Created target server "${target.name}" → ${target.host}.`);
   }
 
   /* ---------------- 7. shared flows ---------------- */

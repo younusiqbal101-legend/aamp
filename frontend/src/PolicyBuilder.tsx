@@ -56,39 +56,11 @@ type PolicyConfig = {
 
 type PolicyBuilderProps = {
   environment: string;
-  // Live shared flows per environment from the backend (falls back to the defaults below).
+  // Live shared flows per environment from the backend.
   sharedFlowsByEnvironment?: Record<string, string[]>;
   onChange: (config: PolicyConfig) => void;
   onEditingChange?: (isEditing: boolean) => void;
   needsSaveAttention?: boolean;
-};
-
-// Temporary environment-specific data for the frontend prototype.
-// The backend will replace this with live Apigee Management API responses.
-const defaultSharedFlows: Record<string, string[]> = {
-  dev: [
-    "SF-Common-Logging",
-    "SF-Correlation-ID",
-    "SF-Centralized-Error-Handling",
-    "SF-Security-Headers",
-    "SF-Request-Validation",
-  ],
-  test: [
-    "SF-Common-Logging",
-    "SF-Correlation-ID",
-    "SF-Centralized-Error-Handling",
-    "SF-Security-Headers",
-  ],
-  stage: [
-    "SF-Common-Logging",
-    "SF-Correlation-ID",
-    "SF-Security-Headers",
-  ],
-  prod: [
-    "SF-Common-Logging",
-    "SF-Correlation-ID",
-    "SF-Centralized-Error-Handling",
-  ],
 };
 
 const initialConfig: PolicyConfig = {
@@ -301,9 +273,7 @@ export default function PolicyBuilder({
   }, [isFlowMenuOpen, isPlacementMenuOpen]);
 
   const availableSharedFlows =
-    sharedFlowsByEnvironment?.[environment.toLowerCase()] ??
-    defaultSharedFlows[environment.toLowerCase()] ??
-    [];
+    sharedFlowsByEnvironment?.[environment.toLowerCase()] ?? [];
 
   function chooseExistingSharedFlow(flow: string) {
     setSelectedExistingFlow(flow);
@@ -946,9 +916,7 @@ export default function PolicyBuilder({
 
             {availableSharedFlows.length === 0 && (
               <p className="policy-help">
-                No sample Shared Flows are configured for this
-                environment. The live portal will load this
-                list from Apigee.
+                No Shared Flows are available in this environment.
               </p>
             )}
           </div>
@@ -1065,12 +1033,6 @@ export default function PolicyBuilder({
           from the API proxy.
         </p>
 
-        <p className="policy-help">
-          Prototype note: the dropdown currently uses sample
-          environment data. Once the backend is connected, it
-          will retrieve the actual Shared Flow list from the
-          selected Apigee environment.
-        </p>
       </section>
       </div>
 

@@ -31,12 +31,9 @@ async function main() {
 
   const info = providerInfo();
   app.listen(PORT, () => {
-    const mode =
-      info.mode === "apigee"
-        ? info.dryRun
-          ? `APIGEE, org "${info.org}", DRY RUN (nothing is sent to Apigee)`
-          : `APIGEE, org "${info.org}", LIVE (real changes will be made in Apigee)`
-        : "MOCK (nothing is sent to Apigee)";
+    const mode = info.dryRun
+      ? `APIGEE, org "${info.org}", DRY RUN (nothing is sent to Apigee)`
+      : `APIGEE, org "${info.org}", LIVE (real changes will be made in Apigee)`;
     console.log(`\nBackend running on http://localhost:${PORT}`);
     console.log(`  .env file : ${envFile} ${envFileFound ? "(loaded)" : "(NOT FOUND - using defaults)"}`);
     console.log(`  Mode      : ${mode}\n`);
