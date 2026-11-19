@@ -1968,6 +1968,7 @@ paths: {}`}
               <button type="button" className="profile-menu-item sign-out" onClick={() => { setPage("home"); setOpenTopMenu(null); }}>Sign out</button>
             </section>
           )}
+        </div>
         <div className="top-right">
           <span className="connection">
             <i />{" "}
