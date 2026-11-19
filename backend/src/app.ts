@@ -98,6 +98,17 @@ function toPayload(body: Record<string, unknown>): RequestPayload {
       name: str(product.name),
       displayName: str(product.displayName),
       description: str(product.description),
+      space: str(product.space),
+      environment: str(product.environment),
+      access: str(product.access),
+      approval: str(product.approval),
+      apiProxy: str(product.apiProxy),
+      resourcePath: str(product.resourcePath),
+      methods: str(product.methods),
+      quotaLimit: str(product.quotaLimit),
+      quotaInterval: str(product.quotaInterval),
+      quotaUnit: str(product.quotaUnit),
+      oauthScopes: str(product.oauthScopes),
     },
     developer: {
       mode: str(developer.mode, "new"),
@@ -105,7 +116,14 @@ function toPayload(body: Record<string, unknown>): RequestPayload {
       email: str(developer.email),
     },
     developerApp: { mode: str(developerApp.mode, "new"), name: str(developerApp.name) },
-    target: { mode: str(target.mode, "existing"), name: str(target.name), url: str(target.url) },
+    target: {
+      mode: str(target.mode, "existing"),
+      name: str(target.name),
+      host: str(target.host),
+      port: str(target.port),
+      protocol: str(target.protocol),
+      sslEnabled: Boolean(target.sslEnabled),
+    },
     policies: obj(body.policies),
   };
 }

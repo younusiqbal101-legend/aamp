@@ -1,7 +1,7 @@
 
 import ProvisioningConsole from './ProvisioningConsole';
 import { type ParsedOpenApiSpec } from "./openApiParser";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   api as apiClient,
   type RequestSummary,
@@ -26,6 +26,41 @@ type AuthType =
   | "OAuth 2.0"
   | "JWT";
 
+type SidebarIconName =
+  | "dashboard"
+  | "create"
+  | "publish"
+  | "resources"
+  | "approve"
+  | "requests"
+  | "proxies"
+  | "products"
+  | "consumers"
+  | "servers"
+  | "flows";
+
+const sidebarIconPaths: Record<SidebarIconName, string> = {
+  dashboard: "M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z",
+  create: "M12 5v14M5 12h14",
+  publish: "M12 16V4m0 0-4 4m4-4 4 4M5 16v3h14v-3",
+  resources: "M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
+  approve: "m5 12 4 4L19 6",
+  requests: "M7 3h10v18H7zM9 3.5h6v3H9zM10 11h4m-4 4h4",
+  proxies: "M4 5h6v6H4zm10 8h6v6h-6zM10 8h4m-2 0v6",
+  products: "M3 7V4h9l8 8-5 5-8-8Zm5 0h.01",
+  consumers: "M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2m14-6a3 3 0 1 0 0-6m-5 3a3 3 0 1 0-6 0",
+  servers: "M4 4h16v6H4zm0 10h16v6H4zm3-7h.01m0 10h.01",
+  flows: "M5 7h10m0 0-3-3m3 3-3 3M19 17H9m0 0 3-3m-3 3 3 3",
+};
+
+function SidebarIcon({ name }: { name: SidebarIconName }) {
+  return (
+    <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d={sidebarIconPaths[name]} />
+    </svg>
+  );
+}
+
 const steps = [
   "Upload & Validate YAML",
   "API Details",
@@ -34,6 +69,8 @@ const steps = [
   "Policies & Shared Flows",
   "Review & Submit",
 ];
+
+const unsavedChangesMessage = "Save your changes before continuing.";
 
 const fallbackTargets = [
   "shipment-backend",
@@ -62,8 +99,40 @@ const fallbackApps = [
 export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [step, setStep] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [openTopMenu, setOpenTopMenu] = useState<"notifications" | "profile" | null>(null);
+  const topMenuRef = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState("");
   const [catalogQuery, setCatalogQuery] = useState("");
+
+  // Each wizard step is a new screen. Reset the document position after React
+  // has rendered it so users always begin at the top of that step.
+  useEffect(() => {
+    if (page === "create") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  }, [page, step]);
+
+  useEffect(() => {
+    if (!openTopMenu) return;
+
+    const closeMenu = (event: MouseEvent) => {
+      if (!topMenuRef.current?.contains(event.target as Node)) {
+        setOpenTopMenu(null);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenTopMenu(null);
+    };
+
+    document.addEventListener("mousedown", closeMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [openTopMenu]);
 
   // YAML
   const [fileName, setFileName] = useState("");
@@ -85,6 +154,11 @@ export default function App() {
   const [contactEmail, setContactEmail] = useState("api-platform@company.com");
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [isEditingOperations, setIsEditingOperations] = useState(false);
+  const [isEditingProduct, setIsEditingProduct] = useState(false);
+  const [isEditingDeveloper, setIsEditingDeveloper] = useState(false);
+  const [isEditingApp, setIsEditingApp] = useState(false);
+  const [isEditingTarget, setIsEditingTarget] = useState(false);
+  const [isEditingPolicies, setIsEditingPolicies] = useState(false);
 
   // Consumer and authentication
   const [consumer, setConsumer] = useState("Internal");
@@ -130,6 +204,17 @@ export default function App() {
   const [productDescription, setProductDescription] = useState(
     "Access product for Shipment API."
   );
+  const [productSpace, setProductSpace] = useState("Default");
+  const [productEnvironment, setProductEnvironment] = useState("dev");
+  const [productAccess, setProductAccess] = useState("Private");
+  const [productApproval, setProductApproval] = useState("Automatic");
+  const [productProxy, setProductProxy] = useState("shipment-api");
+  const [productResourcePath, setProductResourcePath] = useState("/**");
+  const [productMethods, setProductMethods] = useState("GET, POST");
+  const [productQuotaLimit, setProductQuotaLimit] = useState("1000");
+  const [productQuotaInterval, setProductQuotaInterval] = useState("1");
+  const [productQuotaUnit, setProductQuotaUnit] = useState("day");
+  const [productOauthScopes, setProductOauthScopes] = useState("");
 
   // Developer
   const [developerMode, setDeveloperMode] = useState("new");
@@ -150,9 +235,10 @@ export default function App() {
   const [targetMode, setTargetMode] = useState("existing");
   const [target, setTarget] = useState(fallbackTargets[0]);
   const [newTarget, setNewTarget] = useState("shipment-backend-new");
-  const [backend, setBackend] = useState(
-    "https://shipment.dev.internal.company.com"
-  );
+  const [backend, setBackend] = useState("shipment.dev.internal.company.com");
+  const [targetPort, setTargetPort] = useState("443");
+  const [targetProtocol, setTargetProtocol] = useState("HTTPS");
+  const [targetSsl, setTargetSsl] = useState(true);
 
   // Policy configuration
   const [policyConfig, setPolicyConfig] = useState<Record<string, any>>(
@@ -244,6 +330,17 @@ export default function App() {
             name: productName,
             displayName: productDisplayName,
             description: productDescription,
+            space: productSpace,
+            environment: productEnvironment,
+            access: productAccess,
+            approval: productApproval,
+            apiProxy: productProxy,
+            resourcePath: productResourcePath,
+            methods: productMethods,
+            quotaLimit: productQuotaLimit,
+            quotaInterval: productQuotaInterval,
+            quotaUnit: productQuotaUnit,
+            oauthScopes: productOauthScopes,
           }
         : { mode: "existing", name: existingProduct },
     developer:
@@ -256,7 +353,14 @@ export default function App() {
         : { mode: "existing", name: existingApp },
     target:
       targetMode === "new"
-        ? { mode: "new", name: newTarget, url: backend }
+        ? {
+            mode: "new",
+            name: newTarget,
+            host: backend,
+            port: targetPort,
+            protocol: targetProtocol,
+            sslEnabled: targetSsl,
+          }
         : { mode: "existing", name: target },
     policies: policyConfig,
   });
@@ -365,6 +469,38 @@ export default function App() {
       return;
     }
 
+    const activeEditor =
+      step === 1
+        ? isEditingDetails
+          ? "api-details-editor"
+          : isEditingOperations
+            ? "operations-editor"
+            : null
+        : step === 2
+          ? isEditingProduct
+            ? "product-editor"
+            : isEditingDeveloper
+              ? "developer-editor"
+              : isEditingApp
+                ? "app-editor"
+                : null
+          : step === 3 && isEditingTarget
+            ? "target-editor"
+            : step === 4 && isEditingPolicies
+              ? "policies-editor"
+            : null;
+
+    if (activeEditor) {
+      setNotice(unsavedChangesMessage);
+      requestAnimationFrame(() => {
+        document.getElementById(activeEditor)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+      return;
+    }
+
     setNotice("");
     setStep(Math.min(5, step + 1));
   };
@@ -400,12 +536,12 @@ export default function App() {
     }
   };
 
-  const nav = (label: string, destination: Page) => (
+  const nav = (label: string, destination: Page, icon: SidebarIconName) => (
     <button
       className={`nav ${page === destination ? "active" : ""}`}
       onClick={() => setPage(destination)}
     >
-      <span className="nav-icon" aria-hidden="true" />
+      <SidebarIcon name={icon} />
       {label}
     </button>
   );
@@ -609,7 +745,8 @@ export default function App() {
 
   function renderConsumerStep() {
     return (
-      <div className="columns">
+      <div className="columns consumer-layout">
+        <div className="consumer-config-sections">
         {panel(
           <>
             <h2>Step 3: Consumer, Security & Access Management</h2>
@@ -680,10 +817,26 @@ export default function App() {
             </div>
 
             {renderAuthenticationConfiguration()}
+          </>
+        )}
 
-            <hr />
-
-            <h3>C. API Product</h3>
+        {panel(
+          <>
+            <div className="section-title-row" id="product-editor">
+              <h3>C. API Product</h3>
+              {productMode === "new" && (
+                <button className="edit-button" type="button" onClick={() => {
+                  if (isEditingProduct) {
+                    setIsEditingProduct(false);
+                    setNotice("");
+                  } else {
+                    setIsEditingProduct(true);
+                  }
+                }}>
+                  {isEditingProduct ? "Save" : "Edit"}
+                </button>
+              )}
+            </div>
             <p>
               API Products define which API resources and access
               conditions a consumer application can use.
@@ -693,17 +846,53 @@ export default function App() {
 
             {productMode === "new" ? (
               <div className="form">
-                {field("Product Name *", productName, setProductName)}
+                {isEditingProduct && notice === unsavedChangesMessage && <p className="edit-required-message">Save your API Product changes before continuing.</p>}
+                {field("Product Name *", productName, setProductName, "", "text", !isEditingProduct)}
                 {field(
                   "Display Name *",
                   productDisplayName,
-                  setProductDisplayName
+                  setProductDisplayName,
+                  "",
+                  "text",
+                  !isEditingProduct
                 )}
                 {field(
                   "Description",
                   productDescription,
-                  setProductDescription
+                  setProductDescription,
+                  "",
+                  "text",
+                  !isEditingProduct
                 )}
+                {field("Space", productSpace, setProductSpace, "", "text", !isEditingProduct)}
+                {select(
+                  "Environment *",
+                  productEnvironment,
+                  setProductEnvironment,
+                  ["dev", "test", "stage", "prod"],
+                  !isEditingProduct
+                )}
+                {select(
+                  "Access *",
+                  productAccess,
+                  setProductAccess,
+                  ["Private", "Public"],
+                  !isEditingProduct
+                )}
+                {select(
+                  "Request approval",
+                  productApproval,
+                  setProductApproval,
+                  ["Automatic", "Manual"],
+                  !isEditingProduct
+                )}
+                {field("Allowed OAuth scopes", productOauthScopes, setProductOauthScopes, "e.g. shipment.read shipment.write", "text", !isEditingProduct)}
+                {field("API Proxy *", productProxy, setProductProxy, "Select or enter a proxy", "text", !isEditingProduct)}
+                {field("Resource path *", productResourcePath, setProductResourcePath, "e.g. /customers/**", "text", !isEditingProduct)}
+                {field("Allowed HTTP methods", productMethods, setProductMethods, "e.g. GET, POST", "text", !isEditingProduct)}
+                {field("API quota limit", productQuotaLimit, setProductQuotaLimit, "e.g. 1000", "text", !isEditingProduct)}
+                {field("Quota interval", productQuotaInterval, setProductQuotaInterval, "e.g. 1", "text", !isEditingProduct)}
+                {select("Quota unit", productQuotaUnit, setProductQuotaUnit, ["minute", "hour", "day", "month"], !isEditingProduct)}
               </div>
             ) : (
               <div className="form">
@@ -720,10 +909,26 @@ export default function App() {
               The selected API Product will be associated with
               the API proxy being created.
             </div>
+          </>
+        )}
 
-            <hr />
-
-            <h3>D. Developer</h3>
+        {panel(
+          <>
+            <div className="section-title-row" id="developer-editor">
+              <h3>D. Developer</h3>
+              {developerMode === "new" && (
+                <button className="edit-button" type="button" onClick={() => {
+                  if (isEditingDeveloper) {
+                    setIsEditingDeveloper(false);
+                    setNotice("");
+                  } else {
+                    setIsEditingDeveloper(true);
+                  }
+                }}>
+                  {isEditingDeveloper ? "Save" : "Edit"}
+                </button>
+              )}
+            </div>
             <p>
               A Developer represents the consumer or partner
               registered in Apigee.
@@ -733,15 +938,22 @@ export default function App() {
 
             {developerMode === "new" ? (
               <div className="form">
+                {isEditingDeveloper && notice === unsavedChangesMessage && <p className="edit-required-message">Save your Developer changes before continuing.</p>}
                 {field(
                   "Developer Username *",
                   developerName,
-                  setDeveloperName
+                  setDeveloperName,
+                  "",
+                  "text",
+                  !isEditingDeveloper
                 )}
                 {field(
                   "Developer Email *",
                   developerEmail,
-                  setDeveloperEmail
+                  setDeveloperEmail,
+                  "",
+                  "email",
+                  !isEditingDeveloper
                 )}
               </div>
             ) : (
@@ -754,10 +966,26 @@ export default function App() {
                 )}
               </div>
             )}
+          </>
+        )}
 
-            <hr />
-
-            <h3>E. Developer App</h3>
+        {panel(
+          <>
+            <div className="section-title-row" id="app-editor">
+              <h3>E. Developer App</h3>
+              {appMode === "new" && (
+                <button className="edit-button" type="button" onClick={() => {
+                  if (isEditingApp) {
+                    setIsEditingApp(false);
+                    setNotice("");
+                  } else {
+                    setIsEditingApp(true);
+                  }
+                }}>
+                  {isEditingApp ? "Save" : "Edit"}
+                </button>
+              )}
+            </div>
             <p>
               A Developer App represents the application that
               consumes the API and holds its credentials.
@@ -767,7 +995,8 @@ export default function App() {
 
             {appMode === "new" ? (
               <div className="form">
-                {field("App Name *", appName, setAppName)}
+                {isEditingApp && notice === unsavedChangesMessage && <p className="edit-required-message">Save your Developer App changes before continuing.</p>}
+                {field("App Name *", appName, setAppName, "", "text", !isEditingApp)}
               </div>
             ) : (
               <div className="form">
@@ -787,6 +1016,7 @@ export default function App() {
             </div>
           </>
         )}
+        </div>
 
         {panel(
           <>
@@ -876,7 +1106,7 @@ export default function App() {
           ))}
         </div>
 
-        {notice && <div className="notice">{notice}</div>}
+        {notice && <div className={`notice ${notice === unsavedChangesMessage ? "notice-error" : ""}`}>{notice}</div>}
 
         {/* STEP 1: YAML */}
         {step === 0 && (
@@ -1047,17 +1277,28 @@ paths: {}`}
           <div className="openapi-step-two">
             <div className="columns">
               {panel(
-                <>
+                <div id="api-details-editor">
                   <div className="section-title-row">
                     <h2>Step 2: API Details</h2>
-                    <button className="edit-button" type="button" onClick={() => setIsEditingDetails((editing) => !editing)}>
-                      {isEditingDetails ? "Done" : "Edit details"}
+                    <button className="edit-button" type="button" onClick={() => {
+                      if (isEditingDetails) {
+                        setIsEditingDetails(false);
+                        setNotice("");
+                      } else {
+                        setIsEditingDetails(true);
+                      }
+                    }}>
+                      {isEditingDetails ? "Save" : "Edit details"}
                     </button>
                   </div>
                   <p>
                     Review the API metadata extracted from your OpenAPI
                     document. Select Edit details to make a change.
                   </p>
+
+                  {isEditingDetails && notice === unsavedChangesMessage && (
+                    <p className="edit-required-message">Save your API details before continuing.</p>
+                  )}
 
                   <div className="form">
                     {field("Proxy Name *", api, setApi, "", "text", !isEditingDetails)}
@@ -1075,13 +1316,13 @@ paths: {}`}
                     {field("Owning Team", owningTeam, setOwningTeam, "", "text", !isEditingDetails)}
                     {field("Contact Email", contactEmail, setContactEmail, "", "email", !isEditingDetails)}
                   </div>
-                </>
+                </div>
               )}
 
               {renderOpenApiSummary()}
             </div>
 
-            <section className="panel generated-resources-panel">
+            <section className="panel generated-resources-panel" id="operations-editor">
               <div className="generated-resources-heading">
                 <div>
                   <h2>Generated API Resources & Conditional Flows</h2>
@@ -1092,8 +1333,15 @@ paths: {}`}
                   </p>
                 </div>
                 <div className="generated-heading-actions">
-                  <button className="edit-button" type="button" disabled={!parsedSpec} onClick={() => setIsEditingOperations((editing) => !editing)}>
-                    {isEditingOperations ? "Done" : "Edit operations"}
+                  <button className="edit-button" type="button" disabled={!parsedSpec} onClick={() => {
+                    if (isEditingOperations) {
+                      setIsEditingOperations(false);
+                      setNotice("");
+                    } else {
+                      setIsEditingOperations(true);
+                    }
+                  }}>
+                    {isEditingOperations ? "Save" : "Edit"}
                   </button>
                   <span className="resource-count">
                   {parsedSpec?.resources.length ?? 0} resources ·{" "}
@@ -1101,6 +1349,10 @@ paths: {}`}
                   </span>
                 </div>
               </div>
+
+              {isEditingOperations && notice === unsavedChangesMessage && (
+                <p className="edit-required-message">Save your operation changes before continuing.</p>
+              )}
 
               {!parsedSpec ? (
                 <div className="info">
@@ -1257,7 +1509,21 @@ paths: {}`}
           <div className="columns">
             {panel(
               <>
-                <h2>Step 4: Target & Backend Configuration</h2>
+                <div className="section-title-row" id="target-editor">
+                  <h2>Step 4: Target & Backend Configuration</h2>
+                  {targetMode === "new" && (
+                    <button className="edit-button" type="button" onClick={() => {
+                      if (isEditingTarget) {
+                        setIsEditingTarget(false);
+                        setNotice("");
+                      } else {
+                        setIsEditingTarget(true);
+                      }
+                    }}>
+                      {isEditingTarget ? "Save" : "Edit"}
+                    </button>
+                  )}
+                </div>
                 <p>
                   Choose an existing Target Server or create
                   a new one for the selected environment.
@@ -1275,24 +1541,46 @@ paths: {}`}
                     )}
                   </div>
                 ) : (
-                  <div className="form">
+                  <div className="form target-server-form">
+                    {isEditingTarget && notice === unsavedChangesMessage && <p className="edit-required-message">Save your Target Server changes before continuing.</p>}
                     {field(
                       "Target Server Name *",
                       newTarget,
-                      setNewTarget
+                      setNewTarget,
+                      "",
+                      "text",
+                      !isEditingTarget
                     )}
                     {field(
-                      "Backend URL *",
+                      "Host *",
                       backend,
-                      setBackend
+                      (value) => setBackend(
+                        value
+                          .replace(/^https?:\/\//i, "")
+                          .replace(/\/.*$/, "")
+                      ),
+                      "e.g. backend.internal.company.com",
+                      "text",
+                      !isEditingTarget
                     )}
-                    {field("Port", "443", () => {})}
+                    <p className="field-help">Enter a hostname only—do not include <code>http://</code>, <code>https://</code>, or a path.</p>
                     {select(
                       "Protocol",
-                      "HTTPS",
-                      () => {},
-                      ["HTTPS", "HTTP"]
+                      targetProtocol,
+                      setTargetProtocol,
+                      ["HTTPS", "HTTP"],
+                      !isEditingTarget
                     )}
+                    {field("Port *", targetPort, setTargetPort, "e.g. 443", "text", !isEditingTarget)}
+                    <label className="target-ssl-toggle">
+                      <input
+                        type="checkbox"
+                        checked={targetSsl}
+                        onChange={(event) => setTargetSsl(event.target.checked)}
+                        disabled={!isEditingTarget}
+                      />
+                      Enable SSL
+                    </label>
                   </div>
                 )}
 
@@ -1331,6 +1619,11 @@ paths: {}`}
             sharedFlowsByEnvironment={resources.sharedFlows}
             environment={env}
             onChange={setPolicyConfig}
+            onEditingChange={(editing) => {
+              setIsEditingPolicies(editing);
+              if (!editing) setNotice("");
+            }}
+            needsSaveAttention={notice === unsavedChangesMessage}
           />
         )}
 
@@ -1548,42 +1841,108 @@ paths: {}`}
   }
 
   return (
-    <div className="shell">
+    <div className={`shell ${darkMode ? "dark-mode" : ""}`}>
       <header>
-        <div className="brand">
-          <b>AX</b>
-          <span>Apigee <em>Control Center</em></span>
+        <div className="header-left">
+          <button
+            type="button"
+            className="sidebar-toggle"
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            aria-label="Toggle navigation"
+            title="Toggle navigation"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+          <div className="brand">
+            <b>AX</b>
+            <span>Apigee <em>Control Center</em></span>
+          </div>
         </div>
 
-        <div className="top-right">
-          <span className="connection"><i /> Management API connected</span>
-          <span>Environment: {env}</span>
-          <span className="avatar">JD</span>
-          <span>Developer</span>
+        <div className="top-right" ref={topMenuRef}>
+          <button
+            type="button"
+            className="toolbar-icon"
+            onClick={() => setDarkMode((enabled) => !enabled)}
+            aria-label={darkMode ? "Use light theme" : "Use dark theme"}
+            title={darkMode ? "Use light theme" : "Use dark theme"}
+          >
+            {darkMode ? (
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2m10-10h-2M4 12H2m17.1-7.1-1.4 1.4M6.3 17.7l-1.4 1.4m14.2 0-1.4-1.4M6.3 6.3 4.9 4.9" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" /></svg>
+            )}
+          </button>
+          <button
+            type="button"
+            className="toolbar-icon notification-button"
+            onClick={() => setOpenTopMenu((menu) => menu === "notifications" ? null : "notifications")}
+            aria-label="Notifications"
+            aria-expanded={openTopMenu === "notifications"}
+            title="Notifications"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
+            <i aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="avatar"
+            onClick={() => setOpenTopMenu((menu) => menu === "profile" ? null : "profile")}
+            aria-label="Open profile"
+            aria-expanded={openTopMenu === "profile"}
+            title="Profile"
+          >
+            JD
+          </button>
+
+          {openTopMenu === "notifications" && (
+            <section className="top-menu notifications-menu" aria-label="Notifications">
+              <div className="top-menu-heading"><strong>Notifications</strong><span>2 new</span></div>
+              <button type="button" className="notification-item" onClick={() => setOpenTopMenu(null)}>
+                <b>Request REQ-1044 is ready for review</b>
+                <small>Shipment API · 10 minutes ago</small>
+              </button>
+              <button type="button" className="notification-item" onClick={() => setOpenTopMenu(null)}>
+                <b>Payment API was published to dev</b>
+                <small>Deployment completed · 1 hour ago</small>
+              </button>
+              <button type="button" className="view-all-notifications" onClick={() => setOpenTopMenu(null)}>View all notifications</button>
+            </section>
+          )}
+
+          {openTopMenu === "profile" && (
+            <section className="top-menu profile-menu" aria-label="Profile menu">
+              <div className="profile-summary">
+                <span className="profile-avatar-large">JD</span>
+                <div><strong>Jane Developer</strong><small>developer@company.com</small></div>
+              </div>
+              <button type="button" className="profile-menu-item" onClick={() => setOpenTopMenu(null)}>Manage your account</button>
+              <button type="button" className="profile-menu-item" onClick={() => setOpenTopMenu(null)}>Settings</button>
+              <button type="button" className="profile-menu-item sign-out" onClick={() => { setPage("home"); setOpenTopMenu(null); }}>Sign out</button>
+            </section>
+          )}
         </div>
       </header>
 
-      <aside className="sidebar">
-        {nav("Dashboard", "home")}
+      <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
+        {nav("Dashboard", "home", "dashboard")}
 
         <button
           className={`nav create-nav ${page === "create" ? "active" : ""}`}
           onClick={goCreate}
         >
-          <span className="nav-icon" aria-hidden="true" /> Create API <span className="chevron">⌃</span>
+          <SidebarIcon name="create" /> Create API
         </button>
 
-        <button className={`subnav ${page === "create" ? "active" : ""}`} onClick={goCreate}>
-          New API (YAML)
-        </button>
-
-        {nav("Publish API", "publish")}
-        {nav("Access / Read Only", "resources")}
-        {nav("Approve Requests", "approve")}
+        {nav("Publish API", "publish", "publish")}
+        {nav("Access / Read Only", "resources", "resources")}
+        {nav("Approve Requests", "approve", "approve")}
 
         <hr />
 
-        {nav("My requests", "requests")}
+        {nav("My requests", "requests", "requests")}
 
         <hr />
 
@@ -1631,7 +1990,7 @@ paths: {}`}
         ) : page === "catalog" ? renderCatalog() : page === "home" ? (
           <>
             <section className="dashboard-welcome">
-              <h1>Welcome to Apigee Developer Portal</h1>
+              <h1>Welcome</h1>
               <p>Choose the operation you want to perform.</p>
               <span aria-hidden="true" />
             </section>

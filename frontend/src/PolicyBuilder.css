@@ -25,3 +25,22 @@
 .compact-shared-flow-list label { display: flex; align-items: center; gap: 9px; border: 1px solid #dce1e7; border-radius: 6px; padding: 10px; color: #151515; font-size: 13px; cursor: pointer; }
 .compact-shared-flow-list label:hover { background: #f7f9fc; }
 @media (max-width: 750px) { .compact-policy-identity, .compact-policy-fields, .compact-shared-flow-list { grid-template-columns: 1fr; } .compact-policy-summary { align-items: flex-start; } }
+
+/* Keep the self-contained policy builder aligned with the portal's dark theme. */
+.dark-mode .compact-policy-builder { color: #f1f1f1; }
+.dark-mode .compact-policy-section,
+.dark-mode .compact-policy-row { background: #272727; border-color: #4a4a4a; }
+.dark-mode .compact-policy-row.is-selected { border-color: #8a8a8a; }
+.dark-mode .compact-section-title h3,
+.dark-mode .compact-policy-check strong { color: #fff; }
+.dark-mode .compact-section-title p,
+.dark-mode .compact-policy-check small { color: #b3b3b3; }
+.dark-mode .compact-section-title > span { color: #f1f1f1; }
+.dark-mode .compact-policy-config { background: #202020; border-top-color: #4a4a4a; }
+.dark-mode .compact-policy-config label { color: #e5e5e5; }
+.dark-mode .compact-policy-config input,
+.dark-mode .compact-policy-config select { background: #1f1f1f; border-color: #555; color: #f1f1f1; }
+.dark-mode .compact-config-button { background: #343434; border-color: #666; color: #f1f1f1; }
+.dark-mode .compact-config-button:hover,
+.dark-mode .compact-shared-flow-list label:hover { background: #3f3f3f; }
+.dark-mode .compact-shared-flow-list label { border-color: #4a4a4a; color: #e5e5e5; }
