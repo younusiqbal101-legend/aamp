@@ -32,7 +32,11 @@ const fake = http.createServer((req, res) => {
     };
     const { method, path } = call;
 
-    if (method === "GET" && (path === ORG || path === `${ORG}/environments/dev`)) return reply(200);
+    if (method === "GET" && path === `${ORG}/environments`) return reply(200, ["eval"]);
+    if (method === "GET" && (path === ORG || path === `${ORG}/environments/eval`)) return reply(200);
+    if (method === "GET" && path.startsWith(`${ORG}/environments/`) && path.split("/").length === 6) {
+      return reply(404, { error: { message: `Environment "${path.slice(1)}" not found` } });
+    }
     if (method === "POST" && path === `${ORG}/apis`) return reply(200, { name: "shipment-api", revision: "7" });
     if (path === `${ORG}/apiproducts/shipment-product`) {
       if (method === "GET") return state.existing.has("product") ? reply(200, { name: "shipment-product", proxies: ["other-api"], environments: ["test"] }) : reply(404, { error: { message: "not found" } });
@@ -47,12 +51,12 @@ const fake = http.createServer((req, res) => {
     if (method === "POST" && path === `${ORG}/developers/logistics@example.com/apps`) {
       return reply(201, { credentials: [{ consumerKey: "KEY123", consumerSecret: "SECRET-never-logged" }] });
     }
-    if (path === `${ORG}/environments/dev/targetservers/shipment-backend` && method === "GET") return reply(404, { error: { message: "nf" } });
-    if (method === "POST" && path === `${ORG}/environments/dev/targetservers`) return reply(201);
-    if (path.startsWith(`${ORG}/environments/dev/sharedflows/`) && path.endsWith("/deployments")) {
+    if (path === `${ORG}/environments/eval/targetservers/shipment-backend` && method === "GET") return reply(404, { error: { message: "nf" } });
+    if (method === "POST" && path === `${ORG}/environments/eval/targetservers`) return reply(201);
+    if (path.startsWith(`${ORG}/environments/eval/sharedflows/`) && path.endsWith("/deployments")) {
       return state.sharedFlowDeployed ? reply(200, { deployments: [{ revision: "1" }] }) : reply(404, { error: { message: "nf" } });
     }
-    if (path === `${ORG}/environments/dev/apis/shipment-api/revisions/7/deployments`) {
+    if (path === `${ORG}/environments/eval/apis/shipment-api/revisions/7/deployments`) {
       if (method === "POST") return reply(200, {});
       state.deployPolls += 1;
       if (state.deployError) return reply(200, { state: "ERROR", errors: [{ message: "Flow callout references a missing shared flow" }] });
@@ -82,7 +86,7 @@ describe("happy path (apigee provider, live calls against a fake Apigee)", () =>
   const submit = async (overrides: Record<string, unknown> = {}) => {
     calls.length = 0;
     state.deployPolls = 0;
-    const created = await json(server.base, "/api/requests", { method: "POST", body: JSON.stringify(wizardPayload(overrides)) });
+    const created = await json(server.base, "/api/requests", { method: "POST", body: JSON.stringify(wizardPayload({ environment: "eval", ...overrides })) });
     return waitForFinish(server.base, created.body.data.id);
   };
 
@@ -100,12 +104,12 @@ describe("happy path (apigee provider, live calls against a fake Apigee)", () =>
     const seq = calls.map((c) => `${c.method} ${c.path.replace("/v1/organizations/test-org", "")}`);
     const at = (needle: string) => seq.findIndex((s) => s === needle);
     // order of the pipeline
-    assert.ok(at("POST /apis") > at("GET /environments/dev"));
+    assert.ok(at("POST /apis") > at("GET /environments/eval"));
     assert.ok(at("POST /apiproducts") > at("POST /apis"));
     assert.ok(at("POST /developers") > at("POST /apiproducts"));
     assert.ok(at("POST /developers/logistics@example.com/apps") > at("POST /developers"));
-    assert.ok(at("POST /environments/dev/targetservers") > at("POST /developers/logistics@example.com/apps"));
-    assert.ok(at("POST /environments/dev/apis/shipment-api/revisions/7/deployments") > at("POST /environments/dev/targetservers"));
+    assert.ok(at("POST /environments/eval/targetservers") > at("POST /developers/logistics@example.com/apps"));
+    assert.ok(at("POST /environments/eval/apis/shipment-api/revisions/7/deployments") > at("POST /environments/eval/targetservers"));
 
     // proxy import: multipart upload with a zip in the "file" field
     const imp = calls.find((c) => c.method === "POST" && c.path.endsWith("/apis"))!;
@@ -118,7 +122,7 @@ describe("happy path (apigee provider, live calls against a fake Apigee)", () =>
     // product / app / target server bodies
     const product = JSON.parse(calls.find((c) => c.method === "POST" && c.path.endsWith("/apiproducts"))!.body);
     assert.deepEqual(product.proxies, ["shipment-api"]);
-    assert.deepEqual(product.environments, ["dev"]);
+    assert.deepEqual(product.environments, ["eval"]);
     const app = JSON.parse(calls.find((c) => c.method === "POST" && c.path.endsWith("/apps"))!.body);
     assert.deepEqual(app, { name: "shipment-partner-app", apiProducts: ["shipment-product"] });
     const target = JSON.parse(calls.find((c) => c.method === "POST" && c.path.endsWith("/targetservers"))!.body);
@@ -135,6 +139,21 @@ describe("happy path (apigee provider, live calls against a fake Apigee)", () =>
     assert.ok(!done.logs.join("\n").includes("SECRET-never-logged"));
   });
 
+  it("lists the environments that really exist in the Apigee org", async () => {
+    const { body } = await json(server.base, "/api/environments");
+    assert.deepEqual(body.data, ["eval"]);
+  });
+
+  it("explains which environments exist when the chosen one does not", async () => {
+    const done = await submit({ environment: "dev" });
+    assert.equal(done.status, "FAILED");
+    assert.equal(done.operations[0].status, "FAILED");
+    assert.ok(
+      done.logs.some((l: string) => /Environment "dev" does not exist.*Available environments: eval/.test(l)),
+      done.logs.join("\n")
+    );
+  });
+
   it("adds the proxy to an existing API product instead of re-creating it", async () => {
     state.existing.add("product");
     const done = await submit({ product: { mode: "existing", name: "shipment-product" } });
@@ -143,7 +162,7 @@ describe("happy path (apigee provider, live calls against a fake Apigee)", () =>
     const put = calls.find((c) => c.method === "PUT")!;
     const body = JSON.parse(put.body);
     assert.deepEqual(body.proxies.sort(), ["other-api", "shipment-api"]);
-    assert.deepEqual(body.environments.sort(), ["dev", "test"]);
+    assert.deepEqual(body.environments.sort(), ["eval", "test"]);
     assert.ok(!calls.some((c) => c.method === "POST" && c.path.endsWith("/apiproducts")));
   });
 

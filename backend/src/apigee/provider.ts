@@ -3,9 +3,9 @@ import path from "node:path";
 import { logLine } from "../log";
 import { resources as mockResources } from "../resources";
 import type { ProvisioningProvider, ResourceCatalog } from "../provisioning";
-import type { ProvisioningRequest } from "../types";
+import { DEFAULT_ENVIRONMENTS, type ProvisioningRequest } from "../types";
 import { buildProxyBundle, SUPPORTED_AUTH, type BuiltBundle } from "./bundle";
-import { ApigeeClient, enc } from "./client";
+import { ApigeeClient, ApigeeError, enc } from "./client";
 import type { ApigeeConfig } from "./config";
 
 const NAME_RE = /^[A-Za-z0-9._-]+$/;
@@ -58,6 +58,12 @@ export class ApigeeProvider implements ProvisioningProvider {
   }
 
   /* ---------------- live catalogue for the UI dropdowns ---------------- */
+
+  async listEnvironments(): Promise<string[]> {
+    if (this.dryRun) return DEFAULT_ENVIRONMENTS;
+    const { data } = await this.client.call("GET", `${this.orgPath()}/environments`);
+    return names(data, "name");
+  }
 
   async listResources(env: string): Promise<ResourceCatalog> {
     // Dry run needs no credentials, so dropdowns use the built-in sample lists.
@@ -114,7 +120,20 @@ export class ApigeeProvider implements ProvisioningProvider {
       return;
     }
     await this.client.call("GET", this.orgPath());
-    await this.client.call("GET", this.envPath(p.environment));
+    try {
+      await this.client.call("GET", this.envPath(p.environment));
+    } catch (error) {
+      if (error instanceof ApigeeError && error.status === 404) {
+        const available = await this.listEnvironments().catch(() => []);
+        throw new Error(
+          `Environment "${p.environment}" does not exist in Apigee organization "${this.cfg.org}". ` +
+            (available.length
+              ? `Available environments: ${available.join(", ")}. Choose one of them in Step 2.`
+              : "Check the environment name in the Apigee console.")
+        );
+      }
+      throw error;
+    }
     logLine(req, `Apigee org "${this.cfg.org}" and environment "${p.environment}" are reachable.`);
   }
 

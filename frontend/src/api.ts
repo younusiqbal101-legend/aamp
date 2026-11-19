@@ -118,6 +118,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   // /health returns its fields at the top level (no "data" wrapper).
   health: () => request<BackendHealth>("/health"),
+  environments: () => request<string[]>("/environments"),
   resources: (env: string) =>
     request<ResourceCatalog>(`/resources?env=${encodeURIComponent(env)}`),
   validateSpec: (content: string) =>

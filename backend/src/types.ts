@@ -1,8 +1,13 @@
 export type OperationStatus = "PENDING" | "IN_PROGRESS" | "SUCCESS" | "FAILED";
 export type RequestStatus = "DRAFT" | "PROVISIONING" | "COMPLETED" | "FAILED";
 
-export const ENVIRONMENTS = ["dev", "test", "stage", "prod"] as const;
-export type Environment = (typeof ENVIRONMENTS)[number];
+/** Environments offered when Apigee is not queried (mock / dry run). */
+export const DEFAULT_ENVIRONMENTS = ["dev", "test", "stage", "prod"];
+
+/** Real environment names come from the Apigee org (e.g. "eval"), so any valid name is accepted. */
+export type Environment = string;
+export const isValidEnvironmentName = (name: string): boolean =>
+  /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name);
 
 export interface ProvisioningOperation {
   id: number;

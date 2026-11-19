@@ -75,6 +75,12 @@ one conditional flow per OpenAPI operation, a 404 catch-all for everything else,
 5. **Go live**: set `APIGEE_DRY_RUN=false`, restart the backend, and submit again. The final card shows the
    revision, the API key and a ready-to-run `curl`.
 
+### Environment names
+
+The Environment dropdown shows the environments that really exist in your Apigee organization (for example an
+evaluation org only has `eval`), read live from Apigee. In mock and dry-run mode it offers `dev`, `test`, `stage`, `prod`.
+If you submit an environment that does not exist, step 1 fails and lists the available ones.
+
 ### Which mode is the backend really in?
 
 When the backend starts it prints a banner:

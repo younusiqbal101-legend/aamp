@@ -3,7 +3,7 @@ import { ApigeeProvider } from "./apigee/provider";
 import { logLine } from "./log";
 import { resources as mockResources } from "./resources";
 import { store } from "./store";
-import type { ProvisioningOperation, ProvisioningRequest } from "./types";
+import { DEFAULT_ENVIRONMENTS, type ProvisioningOperation, type ProvisioningRequest } from "./types";
 
 export const PIPELINE: Omit<ProvisioningOperation, "status">[] = [
   { id: 1, name: "Validate OpenAPI Specification", description: "Checking YAML structure and API definitions" },
@@ -30,6 +30,8 @@ export interface ProvisioningProvider {
   execute(step: number, request: ProvisioningRequest): Promise<void>;
   /** Live catalogue for the UI dropdowns. */
   listResources(env: string): Promise<ResourceCatalog>;
+  /** Environment names that exist in the target Apigee org. */
+  listEnvironments(): Promise<string[]>;
   /** Free any per-request state once the pipeline has ended. */
   onFinish?(request: ProvisioningRequest): void;
 }
@@ -44,6 +46,10 @@ class MockProvider implements ProvisioningProvider {
 
   async listResources(): Promise<ResourceCatalog> {
     return mockResources;
+  }
+
+  async listEnvironments(): Promise<string[]> {
+    return DEFAULT_ENVIRONMENTS;
   }
 }
 

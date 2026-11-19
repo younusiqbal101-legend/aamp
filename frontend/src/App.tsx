@@ -82,6 +82,14 @@ export default function App() {
     "APIs to manage shipment operations."
   );
   const [env, setEnv] = useState("dev");
+  // Real environment names come from the backend (Apigee orgs are not always dev/test/stage/prod).
+  const [environmentsLoaded, setEnvironmentsLoaded] = useState(false);
+  const [environments, setEnvironments] = useState([
+    "dev",
+    "test",
+    "stage",
+    "prod",
+  ]);
   const [owningTeam, setOwningTeam] = useState("Platform APIs");
   const [contactEmail, setContactEmail] = useState("api-platform@company.com");
   const [isEditingDetails, setIsEditingDetails] = useState(false);
@@ -191,8 +199,28 @@ export default function App() {
       .catch(() => setBackendOnline(false));
   }, []);
 
+  // Environments that actually exist in the Apigee org.
+  useEffect(() => {
+    apiClient
+      .environments()
+      .then((list) => {
+        if (list.length === 0) return;
+        setEnvironments(list);
+        // Switch away from a default that does not exist (e.g. "dev" in an org that only has "eval").
+        setEnv((current) => (list.includes(current) ? current : list[0]));
+      })
+      .catch((error: unknown) =>
+        setNotice(
+          error instanceof Error ? error.message : "Could not load environments."
+        )
+      )
+      .finally(() => setEnvironmentsLoaded(true));
+  }, []);
+
   // Dropdown catalogue (live from Apigee when the backend runs in apigee mode).
   useEffect(() => {
+    // Wait until the real environment names are known, otherwise we ask Apigee about a "dev" that may not exist.
+    if (!environmentsLoaded) return;
     apiClient
       .resources(env)
       .then(setResources)
@@ -204,7 +232,7 @@ export default function App() {
             : "Could not load Apigee resources."
         );
       });
-  }, [env]);
+  }, [env, environmentsLoaded]);
 
   // Refresh request history whenever the page is opened.
   useEffect(() => {
@@ -1083,7 +1111,7 @@ paths: {}`}
                       "Environment *",
                       env,
                       setEnv,
-                      ["dev", "test", "stage", "prod"],
+                      environments,
                       !isEditingDetails
                     )}
                     {field("Owning Team", owningTeam, setOwningTeam, "", "text", !isEditingDetails)}
@@ -1870,7 +1898,7 @@ paths: {}`}
                   "Target Environment",
                   env,
                   setEnv,
-                  ["dev", "test", "stage", "prod"]
+                  environments
                 )}
 
                 <button
