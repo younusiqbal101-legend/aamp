@@ -30,6 +30,18 @@ export interface RequestPayload {
   policies: Record<string, unknown>;
 }
 
+export interface ProvisioningResult {
+  /** Proxy revision that was imported / deployed. */
+  revision?: string;
+  /** Consumer key of the developer app (use as the x-api-key to test). Never the secret. */
+  consumerKey?: string;
+  /** Test URL for the deployed proxy, when APIGEE_RUNTIME_HOST is set. */
+  proxyUrl?: string;
+  /** Where the generated proxy bundle was written (dry run only). */
+  bundlePath?: string;
+  dryRun?: boolean;
+}
+
 export interface ProvisioningRequest {
   id: string;
   apiName: string;
@@ -40,4 +52,6 @@ export interface ProvisioningRequest {
   payload: RequestPayload;
   operations: ProvisioningOperation[];
   logs: string[];
+  result: ProvisioningResult;
+  provider?: { mode: string; dryRun: boolean | null };
 }

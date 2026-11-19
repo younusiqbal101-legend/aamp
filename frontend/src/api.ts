@@ -19,9 +19,31 @@ export type RequestSummary = {
   updatedAt: string;
 };
 
+export type ProvisioningResult = {
+  revision?: string;
+  consumerKey?: string;
+  proxyUrl?: string;
+  bundlePath?: string;
+  dryRun?: boolean;
+};
+
+export type ProviderInfo = {
+  mode: string; // "mock" | "apigee"
+  dryRun: boolean | null;
+};
+
+export type BackendHealth = {
+  success: boolean;
+  mode: string;
+  dryRun: boolean | null;
+  org: string | null;
+};
+
 export type RequestDetail = RequestSummary & {
   operations: ProvisioningOperation[];
   logs: string[];
+  provider?: ProviderInfo;
+  result?: ProvisioningResult;
 };
 
 export type ResourceCatalog = {
@@ -94,8 +116,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  health: () => request<{ success: boolean }>("/health"),
-  resources: () => request<ResourceCatalog>("/resources"),
+  // /health returns its fields at the top level (no "data" wrapper).
+  health: () => request<BackendHealth>("/health"),
+  resources: (env: string) =>
+    request<ResourceCatalog>(`/resources?env=${encodeURIComponent(env)}`),
   validateSpec: (content: string) =>
     request<ParsedOpenApiSpec>("/specs/validate", {
       method: "POST",

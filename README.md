@@ -1,2 +1,95 @@
 # aamp
-Web-based developer portal for uploading, validating, documenting, and managing OpenAPI specifications, with future Apigee X integration.
+
+Web-based developer portal for uploading, validating and onboarding OpenAPI specifications to Apigee X.
+
+```
+frontend/   React + Vite + TypeScript  (http://localhost:5173)
+backend/    Express + TypeScript       (http://localhost:5000, proxied by Vite under /api)
+samples/    Sample OpenAPI files for testing
+```
+
+## Quick start (mock mode, no Apigee needed)
+
+```bash
+cd backend  && npm install && cp .env.example .env && npm run dev     # Windows: copy .env.example .env
+cd frontend && npm install && npm run dev
+```
+
+Open http://localhost:5173, choose **Create API → New API (YAML)**, upload `samples/shipment-api.yaml`
+and click through the six steps. The sidebar/top bar shows which mode the backend is in.
+
+## Tests
+
+```bash
+cd backend && npm test          # API happy path (mock, Apigee dry run, and a fake Apigee server)
+
+# Browser happy path: upload swagger -> every wizard step -> submit -> provisioning completes
+# (backend and frontend must be running)
+cd frontend && npx playwright install chromium   # once
+npm run e2e                                      # HEADED=1 npm run e2e to watch it
+```
+
+## Provisioning to a real Apigee X organization
+
+The backend has two providers, chosen with `PROVISIONING_MODE` in `backend/.env`:
+
+| Mode | What happens on **Submit Request** |
+| --- | --- |
+| `mock` | The 9 steps are simulated. Nothing is created anywhere. |
+| `apigee`, `APIGEE_DRY_RUN=true` | The proxy bundle is generated and validated and saved to `backend/bundles/*.zip`. **No call is made to Apigee.** |
+| `apigee`, `APIGEE_DRY_RUN=false` | Resources are created / updated in your Apigee org (see below). |
+
+### What the 9 steps do against Apigee
+
+1. **Validate** – checks the request, generates the proxy bundle from the form + OpenAPI spec, confirms the org and environment are reachable.
+2. **Import API Proxy** – uploads the bundle (new proxy, or a new revision of an existing one).
+3. **API Product** – creates it, or adds the proxy and environment to an existing product.
+4. **Developer** – creates it, or reuses an existing one.
+5. **Developer App** – creates it (which generates the API key) or attaches the product to an existing app.
+6. **Target Server** – creates it in the environment, or verifies an existing one.
+7. **Shared Flows** – verifies every selected shared flow is *deployed* in the environment (the proxy cannot deploy otherwise).
+8. **Deploy** – deploys the new revision (`override=true`, replacing the previously deployed revision).
+9. **Verify** – polls until the deployment is `READY`; fails with Apigee's error message on `ERROR`.
+
+The generated proxy has: Spike Arrest → Verify API Key → Quota → JSON Threat Protection (only the ones you enabled),
+shared-flow callouts at the placement chosen in the UI, CORS (with OPTIONS pre-flight handling),
+one conditional flow per OpenAPI operation, a 404 catch-all for everything else, and a route to the Target Server.
+
+### Setup, step by step
+
+1. **Prerequisites**: an Apigee X organization, an environment (e.g. `dev`) attached to an environment group, and a Google identity allowed to manage Apigee (for example the *Apigee API Admin* role, or a custom role with equivalent permissions).
+2. **Credentials** (pick one; see `.env.example`):
+   - `gcloud auth application-default login` — simplest for local work, nothing to put in `.env`.
+   - `APIGEE_ACCESS_TOKEN=$(gcloud auth print-access-token)` — expires in about an hour.
+   - A service-account key file via `GOOGLE_APPLICATION_CREDENTIALS`.
+3. **Configure** `backend/.env`:
+   ```
+   PROVISIONING_MODE=apigee
+   APIGEE_ORG=<your-gcp-project-id>
+   APIGEE_DRY_RUN=true
+   APIGEE_RUNTIME_HOST=<environment group hostname>   # optional, for the test URL
+   ```
+4. **Dry run first.** Restart the backend, submit a request, and confirm the top bar says `Apigee <org> · dry run`
+   and the request completes. Open `backend/bundles/<api>-<REQ>.zip` and, if you like, import it manually in the
+   Apigee console to see exactly what would be deployed.
+5. **Go live**: set `APIGEE_DRY_RUN=false`, restart the backend, and submit again. The final card shows the
+   revision, the API key and a ready-to-run `curl`.
+
+### Smoke test with Apigee's public mock service
+
+Use `samples/mocktarget-api.yaml`, keep the base path `/mock/v1` (Step 2), choose API Key auth, and in Step 4 create a
+new target server `mocktarget` with backend URL `https://mocktarget.apigee.net`. After deployment:
+
+```bash
+curl -H "x-api-key: <consumer key from the final card>" https://<APIGEE_RUNTIME_HOST>/mock/v1/json
+```
+
+### Current limits (real provisioning)
+
+- **Only API Key authentication** is generated. Basic, OAuth 2.0 and JWT are rejected in step 1 with a clear message
+  rather than deploying an unprotected proxy.
+- Shared flows must already exist and be deployed in the environment; uploading a *new* shared-flow bundle is not implemented.
+- Multiple CORS origins are supported (one policy per origin); a single `*` is fine too.
+- The backend API itself has **no authentication yet** and the request store is **in memory** (lost on restart).
+  Do not expose it beyond your machine/network until both are addressed.
+- Names must follow Apigee rules (letters, digits, `.`, `_`, `-`).

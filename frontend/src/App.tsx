@@ -4,6 +4,7 @@ import { type ParsedOpenApiSpec } from "./openApiParser";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   api as apiClient,
+  type BackendHealth,
   type RequestSummary,
   type ResourceCatalog,
 } from "./api";
@@ -164,6 +165,7 @@ export default function App() {
   const [validating, setValidating] = useState(false);
   const [requests, setRequests] = useState<RequestSummary[]>([]);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [backendInfo, setBackendInfo] = useState<BackendHealth | null>(null);
   const [resources, setResources] = useState<ResourceCatalog>({
     targets: fallbackTargets,
     products: fallbackProducts,
@@ -178,19 +180,31 @@ export default function App() {
   const existingDevelopers = resources.developers;
   const existingApps = resources.apps;
 
-  // Backend health + catalogue on startup.
+  // Backend health (and which provisioning mode it runs in) on startup.
   useEffect(() => {
     apiClient
       .health()
-      .then(() => setBackendOnline(true))
+      .then((info) => {
+        setBackendOnline(true);
+        setBackendInfo(info);
+      })
       .catch(() => setBackendOnline(false));
-    apiClient
-      .resources()
-      .then(setResources)
-      .catch(() => {
-        /* keep fallbacks; health indicator shows the problem */
-      });
   }, []);
+
+  // Dropdown catalogue (live from Apigee when the backend runs in apigee mode).
+  useEffect(() => {
+    apiClient
+      .resources(env)
+      .then(setResources)
+      .catch((error: unknown) => {
+        // Keep the built-in fallback lists, but tell the user why they are stale.
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : "Could not load Apigee resources."
+        );
+      });
+  }, [env]);
 
   // Refresh request history whenever the page is opened.
   useEffect(() => {
@@ -1498,8 +1512,11 @@ paths: {}`}
                 </ol>
 
                 <div className="callout warn">
-                  Frontend prototype only. Submission does not
-                  create actual Apigee resources yet.
+                  {backendInfo?.mode === "apigee"
+                    ? backendInfo.dryRun
+                      ? "Dry run: the proxy bundle is generated and saved by the backend, but nothing is created or changed in Apigee."
+                      : `Live: submitting creates or updates resources in Apigee organization "${backendInfo.org}" (${env}).`
+                    : "Mock mode: submission simulates provisioning. No Apigee resources are created."}
                 </div>
               </>,
               "aside"
@@ -1556,7 +1573,14 @@ paths: {}`}
         </div>
 
         <div className="top-right">
-          <span className="connection"><i /> Management API connected</span>
+          <span className="connection">
+            <i />{" "}
+            {backendInfo?.mode === "apigee"
+              ? `Apigee ${backendInfo.org}${backendInfo.dryRun ? " · dry run" : ""}`
+              : backendOnline === false
+                ? "Backend offline"
+                : "Mock backend"}
+          </span>
           <span>Environment: {env}</span>
           <span className="avatar">JD</span>
           <span>Developer</span>
@@ -1608,7 +1632,7 @@ paths: {}`}
         </button>
 
         <div className="sidebar-bottom">
-          <span className="status-light" /> Sandbox workspace
+          <span className="status-light" /> Sandbox workspace{" "}
           {backendOnline === null
             ? "● Connecting to backend…"
             : backendOnline

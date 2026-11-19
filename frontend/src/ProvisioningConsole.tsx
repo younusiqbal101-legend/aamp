@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, type ProvisioningOperation, type RequestStatus } from "./api";
+import {
+  api,
+  type ProviderInfo,
+  type ProvisioningOperation,
+  type ProvisioningResult,
+  type RequestStatus,
+} from "./api";
 
 type ProvisioningConsoleProps = {
   requestId: string;
@@ -23,6 +29,8 @@ export default function ProvisioningConsole({
   const [logs, setLogs] = useState<string[]>([]);
   const [status, setStatus] = useState<RequestStatus>("PROVISIONING");
   const [error, setError] = useState("");
+  const [provider, setProvider] = useState<ProviderInfo | undefined>();
+  const [result, setResult] = useState<ProvisioningResult>({});
 
   const isComplete = status === "COMPLETED";
   const isFailed = status === "FAILED";
@@ -52,6 +60,8 @@ export default function ProvisioningConsole({
         setOperations(request.operations);
         setLogs(request.logs);
         setStatus(request.status);
+        setProvider(request.provider);
+        setResult(request.result ?? {});
 
         if (request.status === "COMPLETED" || request.status === "FAILED") {
           return;
@@ -223,11 +233,57 @@ export default function ProvisioningConsole({
           <div className="acknowledgement-icon">✓</div>
 
           <div>
-            <h2>Provisioning completed</h2>
-            <p>
-              The provisioning pipeline for {apiName} has finished
-              successfully in {environment}.
-            </p>
+            {provider?.mode === "apigee" && provider.dryRun ? (
+              <>
+                <h2>Dry run completed</h2>
+                <p>
+                  The proxy bundle for {apiName} was generated and
+                  validated. Nothing was created or changed in Apigee.
+                  {result.bundlePath && (
+                    <>
+                      {" "}Bundle saved at <code>{result.bundlePath}</code>.
+                    </>
+                  )}{" "}
+                  Set <code>APIGEE_DRY_RUN=false</code> on the backend
+                  to provision for real.
+                </p>
+              </>
+            ) : provider?.mode === "apigee" ? (
+              <>
+                <h2>Deployed to Apigee</h2>
+                <p>
+                  {apiName} revision {result.revision} is deployed in{" "}
+                  {environment}.
+                </p>
+                {result.consumerKey && (
+                  <p>
+                    API key (consumer key):{" "}
+                    <code>{result.consumerKey}</code>
+                  </p>
+                )}
+                {result.proxyUrl ? (
+                  <p>
+                    Test it:{" "}
+                    <code>
+                      curl -H "x-api-key: {result.consumerKey ?? "KEY"}" {result.proxyUrl}
+                    </code>
+                  </p>
+                ) : (
+                  <p>
+                    Set <code>APIGEE_RUNTIME_HOST</code> on the backend to
+                    see a ready-made test URL here.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <h2>Mock pipeline completed</h2>
+                <p>
+                  The backend is running in mock mode, so no Apigee
+                  resources were created or deployed.
+                </p>
+              </>
+            )}
           </div>
         </section>
       )}
