@@ -66,14 +66,28 @@ export class ApigeeProvider implements ProvisioningProvider {
 
   async listResources(env: string): Promise<ResourceCatalog> {
     const org = this.orgPath();
-    const [products, developers, apps, targets, flows] = await Promise.all([
+    const [proxies, products, developers, apps, targets, flows] = await Promise.all([
+      this.client.call("GET", `${org}/apis`),
       this.client.call("GET", `${org}/apiproducts`),
       this.client.call("GET", `${org}/developers`),
       this.client.call("GET", `${org}/apps`, { query: { expand: "true" } }),
       this.client.call("GET", `${this.envPath(env)}/targetservers`),
       this.client.call("GET", `${org}/sharedflows`),
     ]);
+    const proxyNames = names(proxies.data.proxies ?? proxies.data, "name");
+    const deployments = await this.client.call("GET", `${this.envPath(env)}/deployments`, { allow: [404] });
+    const deployed = Array.isArray((deployments.data as any)?.deployments) ? (deployments.data as any).deployments : [];
+    const basePaths = (await Promise.all(deployed.map(async (deployment: any) => {
+      const proxy = deployment.apiProxy ?? deployment.aPIProxy ?? deployment.proxy;
+      const revision = deployment.revision ?? deployment.revisionNumber;
+      if (!proxy || !revision) return "";
+      const endpoint = await this.client.call("GET", `${this.orgPath()}/apis/${enc(proxy)}/revisions/${enc(String(revision))}/proxies/default`, { allow: [404] });
+      const xml = typeof endpoint.data === "string" ? endpoint.data : "";
+      return xml.match(/<BasePath>([^<]+)<\/BasePath>/)?.[1] ?? "";
+    }))).filter(Boolean).sort();
     return {
+      basePaths,
+      proxies: proxyNames,
       products: names(products.data.apiProduct, "name"),
       developers: names(developers.data.developer, "email"),
       apps: names(apps.data.app, "name"),
@@ -96,6 +110,9 @@ export class ApigeeProvider implements ProvisioningProvider {
     if (!p.basePath.startsWith("/")) problems.push('base path must start with "/"');
     if (!NAME_RE.test(p.product.name)) problems.push("API product name is missing or has invalid characters");
     if (!EMAIL_RE.test(p.developer.email)) problems.push("developer e-mail is invalid");
+    if (p.developer.mode === "new" && !p.developer.firstName?.trim()) problems.push("developer first name is required");
+    if (p.developer.mode === "new" && !p.developer.lastName?.trim()) problems.push("developer last name is required");
+    if (p.developer.mode === "new" && !NAME_RE.test(p.developer.name)) problems.push("developer username is missing or has invalid characters");
     if (!NAME_RE.test(p.developerApp.name)) problems.push("developer app name is missing or has invalid characters");
     if (!NAME_RE.test(p.target.name)) problems.push("target server name is missing or has invalid characters");
     if (p.target.mode === "new") {
@@ -128,6 +145,14 @@ export class ApigeeProvider implements ProvisioningProvider {
       }
       throw error;
     }
+    const [proxy, product, target] = await Promise.all([
+      this.client.call("GET", `${this.orgPath()}/apis/${enc(p.apiName)}`, { allow: [404] }),
+      this.client.call("GET", `${this.orgPath()}/apiproducts/${enc(p.product.name)}`, { allow: [404] }),
+      this.client.call("GET", `${this.envPath(p.environment)}/targetservers/${enc(p.target.name)}`, { allow: [404] }),
+    ]);
+    if (proxy.status !== 404) throw new Error(`API proxy "${p.apiName}" already exists.`);
+    if (p.product.mode === "new" && product.status !== 404) throw new Error(`API product "${p.product.name}" already exists.`);
+    if (p.target.mode === "new" && target.status !== 404) throw new Error(`Target server "${p.target.name}" already exists in "${p.environment}".`);
     logLine(req, `Apigee org "${this.cfg.org}" and environment "${p.environment}" are reachable.`);
   }
 
@@ -212,8 +237,8 @@ export class ApigeeProvider implements ProvisioningProvider {
     await this.client.call("POST", `${this.orgPath()}/developers`, {
       json: {
         email: developer.email,
-        firstName: developer.name || developer.email.split("@")[0],
-        lastName: "Developer", // Apigee requires a last name; the portal only collects one name.
+        firstName: developer.firstName || developer.name || developer.email.split("@")[0],
+        lastName: developer.lastName || "Developer",
         userName: developer.name || developer.email.split("@")[0],
       },
     });

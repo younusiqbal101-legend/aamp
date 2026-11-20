@@ -17,6 +17,8 @@ export const PIPELINE: Omit<ProvisioningOperation, "status">[] = [
 ];
 
 export interface ResourceCatalog {
+  proxies: string[];
+  basePaths: string[];
   targets: string[];
   products: string[];
   developers: string[];

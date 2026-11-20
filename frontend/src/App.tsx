@@ -80,8 +80,10 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [openTopMenu, setOpenTopMenu] = useState<"notifications" | "profile" | null>(null);
   const topMenuRef = useRef<HTMLDivElement>(null);
+  const methodsDropdownRef = useRef<HTMLLabelElement>(null);
   const [notice, setNotice] = useState("");
   const [catalogQuery, setCatalogQuery] = useState("");
+  const [methodsDropdownOpen, setMethodsDropdownOpen] = useState(false);
 
   // Each wizard step is a new screen. Reset the document position after React
   // has rendered it so users always begin at the top of that step.
@@ -111,6 +113,17 @@ export default function App() {
     };
   }, [openTopMenu]);
 
+  useEffect(() => {
+    if (!methodsDropdownOpen) return;
+    const closeDropdown = (event: MouseEvent) => {
+      if (!methodsDropdownRef.current?.contains(event.target as Node)) {
+        setMethodsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeDropdown);
+    return () => document.removeEventListener("mousedown", closeDropdown);
+  }, [methodsDropdownOpen]);
+
   // YAML
   const [fileName, setFileName] = useState("");
   const [yaml, setYaml] = useState("");
@@ -131,11 +144,15 @@ export default function App() {
   const [owningTeam, setOwningTeam] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [detailsValidationAttempted, setDetailsValidationAttempted] = useState(false);
   const [isEditingOperations, setIsEditingOperations] = useState(false);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
   const [isEditingDeveloper, setIsEditingDeveloper] = useState(false);
   const [isEditingApp, setIsEditingApp] = useState(false);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
+  const [productValidationAttempted, setProductValidationAttempted] = useState(false);
+  const [appValidationAttempted, setAppValidationAttempted] = useState(false);
+  const [targetValidationAttempted, setTargetValidationAttempted] = useState(false);
   const [isEditingPolicies, setIsEditingPolicies] = useState(false);
 
   // Consumer and authentication
@@ -170,20 +187,23 @@ export default function App() {
   const [productDescription, setProductDescription] = useState("");
   const [productSpace, setProductSpace] = useState("");
   const [productEnvironment, setProductEnvironment] = useState("");
-  const [productAccess, setProductAccess] = useState("Private");
-  const [productApproval, setProductApproval] = useState("Automatic");
+  const [productAccess, setProductAccess] = useState("");
+  const [productApproval, setProductApproval] = useState("");
   const [productProxy, setProductProxy] = useState("");
   const [productResourcePath, setProductResourcePath] = useState("/**");
-  const [productMethods, setProductMethods] = useState("GET, POST");
+  const [productMethods, setProductMethods] = useState("");
   const [productQuotaLimit, setProductQuotaLimit] = useState("1000");
   const [productQuotaInterval, setProductQuotaInterval] = useState("1");
-  const [productQuotaUnit, setProductQuotaUnit] = useState("day");
+  const [productQuotaUnit, setProductQuotaUnit] = useState("");
   const [productOauthScopes, setProductOauthScopes] = useState("");
 
   // Developer
   const [developerMode, setDeveloperMode] = useState("new");
+  const [developerFirstName, setDeveloperFirstName] = useState("");
+  const [developerLastName, setDeveloperLastName] = useState("");
   const [developerName, setDeveloperName] = useState("");
   const [developerEmail, setDeveloperEmail] = useState("");
+  const [developerValidationAttempted, setDeveloperValidationAttempted] = useState(false);
   const [existingDeveloper, setExistingDeveloper] = useState("");
 
   // Developer App
@@ -212,6 +232,8 @@ export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [backendInfo, setBackendInfo] = useState<BackendHealth | null>(null);
   const [resources, setResources] = useState<ResourceCatalog>({
+    proxies: [],
+    basePaths: [],
     targets: [],
     products: [],
     developers: [],
@@ -219,10 +241,14 @@ export default function App() {
     sharedFlows: {},
   });
 
+  const existingProxies = resources.proxies;
   const targets = resources.targets;
   const existingProducts = resources.products;
   const existingDevelopers = resources.developers;
   const existingApps = resources.apps;
+  const proxyOptions = Array.from(new Set([...existingProxies, api].filter(Boolean))).sort();
+  const methodOptions = ["GET", "PATCH", "POST", "PUT", "DELETE", "HEAD", "CONNECT", "OPTIONS", "TRACE"];
+  const selectedProductMethods = productMethods.split(",").map((method) => method.trim()).filter(Boolean);
 
   // Backend health (and which provisioning mode it runs in) on startup.
   useEffect(() => {
@@ -243,7 +269,7 @@ export default function App() {
         if (list.length === 0) return;
         setEnvironments(list);
         setEnv((current) => (list.includes(current) ? current : list[0]));
-        setProductEnvironment((current) => (list.includes(current) ? current : list[0]));
+        setProductEnvironment((current) => (list.includes(current) ? current : ""));
       })
       .catch((error: unknown) =>
         setNotice(
@@ -256,12 +282,18 @@ export default function App() {
   // Dropdown catalogue (live from Apigee when the backend runs in apigee mode).
   useEffect(() => {
     // Wait until the real environment names are known, otherwise we ask Apigee about a "dev" that may not exist.
-    if (!environmentsLoaded) return;
+    if (!environmentsLoaded || !env) return;
     apiClient
       .resources(env)
-      .then(setResources)
+      .then((catalog) => {
+        setResources(catalog);
+        setExistingProduct((current) => catalog.products.includes(current) ? current : "");
+        setExistingDeveloper((current) => catalog.developers.includes(current) ? current : "");
+        setExistingApp((current) => catalog.apps.includes(current) ? current : "");
+        setTarget((current) => catalog.targets.includes(current) ? current : "");
+      })
       .catch((error: unknown) => {
-        setResources({ targets: [], products: [], developers: [], apps: [], sharedFlows: {} });
+        setResources({ proxies: [], basePaths: [], targets: [], products: [], developers: [], apps: [], sharedFlows: {} });
         setNotice(error instanceof Error ? error.message : "Could not load Apigee resources.");
       });
   }, [env, environmentsLoaded]);
@@ -333,7 +365,13 @@ export default function App() {
         : { mode: "existing", name: existingProduct },
     developer:
       developerMode === "new"
-        ? { mode: "new", name: developerName, email: developerEmail }
+        ? {
+            mode: "new",
+            name: developerName,
+            firstName: developerFirstName,
+            lastName: developerLastName,
+            email: developerEmail,
+          }
         : { mode: "existing", name: existingDeveloper, email: existingDeveloper },
     developerApp:
       appMode === "new"
@@ -359,9 +397,10 @@ export default function App() {
     onChange: (value: string) => void,
     placeholder = "",
     type = "text",
-    disabled = false
+    disabled = false,
+    error: string | null = null
   ) => (
-    <label className="field">
+    <label className={`field${error ? " has-error" : ""}`}>
       <span>{label}</span>
       <input
         type={type}
@@ -370,6 +409,29 @@ export default function App() {
         placeholder={placeholder}
         disabled={disabled}
       />
+      {error && <small className="field-error">● {error}</small>}
+    </label>
+  );
+
+  const developerField = (
+    label: string,
+    value: string,
+    onChange: (value: string) => void,
+    placeholder: string,
+    type: string,
+    error: string | null
+  ) => (
+    <label className={`field${error ? " has-error" : ""}`}>
+      <span>{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        disabled={!isEditingDeveloper}
+        aria-invalid={Boolean(error)}
+      />
+      {error && <small className="field-error">● {error}</small>}
     </label>
   );
 
@@ -378,23 +440,35 @@ export default function App() {
     value: string,
     onChange: (value: string) => void,
     options: string[],
-    disabled = false
+    disabled = false,
+    error: string | null = null
   ) => (
-    <label className="field">
+    <label className={`field${error ? " has-error" : ""}`}>
       <span>{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
       >
+        <option value="" disabled>{`Select ${label.replace(" *", "")}`}</option>
+        {options.length === 0 && <option value="" disabled>No live resources available</option>}
         {options.map((option) => (
           <option key={option} value={option}>
             {option}
           </option>
         ))}
       </select>
+      {error && <small className="field-error">● {error}</small>}
     </label>
   );
+
+  const toggleProductMethod = (method: string) => {
+    setProductMethods(
+      selectedProductMethods.includes(method)
+        ? selectedProductMethods.filter((value) => value !== method).join(", ")
+        : [...selectedProductMethods, method].join(", ")
+    );
+  };
 
   const title = (heading: string, subtitle: string) => (
     <div className="heading">
@@ -455,6 +529,98 @@ export default function App() {
     if (step === 1 && !parsedSpec) {
       setNotice("Return to Step 1 and parse the OpenAPI document first.");
       return;
+    }
+
+    if (step === 1 && (!api.trim() || !display.trim() || !basePath.trim() || !version.trim() || !description.trim() || !env)) {
+      setIsEditingDetails(true);
+      setDetailsValidationAttempted(true);
+      setNotice("Complete all required API Details fields before continuing.");
+      requestAnimationFrame(() => {
+        document.getElementById("api-details-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return;
+    }
+
+    if (step === 1 && existingProxies.some((name) => name.trim().toLowerCase() === api.trim().toLowerCase())) {
+      setIsEditingDetails(true);
+      setDetailsValidationAttempted(true);
+      setNotice(`A proxy named "${api}" already exists in ${env}. Use a different proxy name.`);
+      return;
+    }
+    if (step === 1 && resources.basePaths.some((path) => path.replace(/\/$/, "") === basePath.trim().replace(/\/$/, ""))) {
+      setIsEditingDetails(true);
+      setDetailsValidationAttempted(true);
+      setNotice(`The base path "${basePath}" is already deployed in ${env}. Use a different base path.`);
+      return;
+    }
+
+    const showRequiredError = (editorId: string, message: string) => {
+      setNotice(message);
+      requestAnimationFrame(() => {
+        document.getElementById(editorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    };
+
+    if (step === 2) {
+      if (productMode === "new" && (!productName.trim() || !productDisplayName.trim() || !productEnvironment || !productAccess || !productApproval || !productProxy || !productResourcePath.trim())) {
+        setIsEditingProduct(true);
+        showRequiredError("product-editor", "Complete all required API Product fields before continuing.");
+        return;
+      }
+      if (productMode === "new" && existingProducts.includes(productName)) {
+        setIsEditingProduct(true);
+        showRequiredError("product-editor", `An API Product named "${productName}" already exists. Use a different name.`);
+        return;
+      }
+      if (productMode === "existing" && !existingProduct) {
+        setIsEditingProduct(true);
+        showRequiredError("product-editor", "Select an existing API Product before continuing.");
+        return;
+      }
+      if (developerMode === "new" && (!developerFirstName.trim() || !developerLastName.trim() || !developerEmail.trim() || !developerName.trim())) {
+        setIsEditingDeveloper(true);
+        setDeveloperValidationAttempted(true);
+        showRequiredError("developer-editor", "Complete all required Developer fields before continuing.");
+        return;
+      }
+      if (developerMode === "existing" && !existingDeveloper) {
+        setIsEditingDeveloper(true);
+        showRequiredError("developer-editor", "Select an existing Developer before continuing.");
+        return;
+      }
+      if (appMode === "new" && !appName.trim()) {
+        setIsEditingApp(true);
+        showRequiredError("app-editor", "Enter an App Name before continuing.");
+        return;
+      }
+      if (appMode === "new" && existingApps.includes(appName)) {
+        setIsEditingApp(true);
+        showRequiredError("app-editor", `A Developer App named "${appName}" already exists. Use a different name.`);
+        return;
+      }
+      if (appMode === "existing" && !existingApp) {
+        setIsEditingApp(true);
+        showRequiredError("app-editor", "Select an existing Developer App before continuing.");
+        return;
+      }
+    }
+
+    if (step === 3) {
+      if (targetMode === "existing" && !target) {
+        setIsEditingTarget(true);
+        showRequiredError("target-editor", "Select an existing Target Server before continuing.");
+        return;
+      }
+      if (targetMode === "new" && (!newTarget.trim() || !backend.trim() || !targetPort.trim() || !targetProtocol)) {
+        setIsEditingTarget(true);
+        showRequiredError("target-editor", "Complete all required Target Server fields before continuing.");
+        return;
+      }
+      if (targetMode === "new" && targets.includes(newTarget)) {
+        setIsEditingTarget(true);
+        showRequiredError("target-editor", `A Target Server named "${newTarget}" already exists in ${env}. Use a different name.`);
+        return;
+      }
     }
 
     const activeEditor =
@@ -813,10 +979,18 @@ export default function App() {
           <>
             <div className="section-title-row" id="product-editor">
               <h3>C. API Product</h3>
-              {productMode === "new" && (
-                <button className="edit-button" type="button" onClick={() => {
+              <button className="edit-button" type="button" onClick={() => {
                   if (isEditingProduct) {
+                    if (!productName.trim() || !productDisplayName.trim() || !productEnvironment || !productAccess || !productApproval || !productProxy || !productResourcePath.trim()) {
+                      setProductValidationAttempted(true);
+                      return;
+                    }
+                    if (existingProducts.some((name) => name.trim().toLowerCase() === productName.trim().toLowerCase())) {
+                      setNotice(`An API Product named "${productName}" already exists. Use a different name.`);
+                      return;
+                    }
                     setIsEditingProduct(false);
+                    setProductValidationAttempted(false);
                     setNotice("");
                   } else {
                     setIsEditingProduct(true);
@@ -824,64 +998,145 @@ export default function App() {
                 }}>
                   {isEditingProduct ? "Save" : "Edit"}
                 </button>
-              )}
             </div>
             <p>
               API Products define which API resources and access
               conditions a consumer application can use.
             </p>
 
-            {choose(productMode, setProductMode)}
+            {choose(productMode, (mode) => {
+              setProductMode(mode);
+              setIsEditingProduct(false);
+            })}
 
             {productMode === "new" ? (
               <div className="form">
                 {isEditingProduct && notice === unsavedChangesMessage && <p className="edit-required-message">Save your API Product changes before continuing.</p>}
-                {field("Product Name *", productName, setProductName, "", "text", !isEditingProduct)}
-                {field(
-                  "Display Name *",
-                  productDisplayName,
-                  setProductDisplayName,
-                  "",
-                  "text",
-                  !isEditingProduct
-                )}
-                {field(
-                  "Description",
-                  productDescription,
-                  setProductDescription,
-                  "",
-                  "text",
-                  !isEditingProduct
-                )}
-                {field("Space", productSpace, setProductSpace, "", "text", !isEditingProduct)}
-                {select(
-                  "Environment *",
-                  productEnvironment,
-                  setProductEnvironment,
-                  ["dev", "test", "stage", "prod"],
-                  !isEditingProduct
-                )}
-                {select(
-                  "Access *",
-                  productAccess,
-                  setProductAccess,
-                  ["Private", "Public"],
-                  !isEditingProduct
-                )}
-                {select(
-                  "Request approval",
-                  productApproval,
-                  setProductApproval,
-                  ["Automatic", "Manual"],
-                  !isEditingProduct
-                )}
-                {field("Allowed OAuth scopes", productOauthScopes, setProductOauthScopes, "e.g. shipment.read shipment.write", "text", !isEditingProduct)}
-                {field("API Proxy *", productProxy, setProductProxy, "Select or enter a proxy", "text", !isEditingProduct)}
-                {field("Resource path *", productResourcePath, setProductResourcePath, "e.g. /customers/**", "text", !isEditingProduct)}
-                {field("Allowed HTTP methods", productMethods, setProductMethods, "e.g. GET, POST", "text", !isEditingProduct)}
-                {field("API quota limit", productQuotaLimit, setProductQuotaLimit, "e.g. 1000", "text", !isEditingProduct)}
-                {field("Quota interval", productQuotaInterval, setProductQuotaInterval, "e.g. 1", "text", !isEditingProduct)}
-                {select("Quota unit", productQuotaUnit, setProductQuotaUnit, ["minute", "hour", "day", "month"], !isEditingProduct)}
+                {isEditingProduct && productValidationAttempted && <p className="edit-required-message">Please complete all required API Product fields.</p>}
+                {notice.includes("API Product") && notice !== unsavedChangesMessage && <p className="edit-required-message">{notice}</p>}
+                <div className="product-settings-box">
+                  {field("Product Name *", productName, setProductName, "Product name", "text", !isEditingProduct)}
+                  {field(
+                    "Display Name *",
+                    productDisplayName,
+                    setProductDisplayName,
+                    "Display name",
+                    "text",
+                    !isEditingProduct
+                  )}
+                  {field(
+                    "Description",
+                    productDescription,
+                    setProductDescription,
+                    "Description",
+                    "text",
+                    !isEditingProduct
+                  )}
+                </div>
+                <div className="product-form-divider" aria-hidden="true" />
+                <div className="product-settings-box">
+                  {field("Space", productSpace, setProductSpace, "Space", "text", !isEditingProduct)}
+                  {select(
+                    "Environment *",
+                    productEnvironment,
+                    setProductEnvironment,
+                    environments,
+                    !isEditingProduct
+                  )}
+                  {select(
+                    "Access *",
+                    productAccess,
+                    setProductAccess,
+                    ["Private", "Public", "Internal only"],
+                    !isEditingProduct
+                  )}
+                  {select(
+                    "Request approval",
+                    productApproval,
+                    setProductApproval,
+                    ["Automatic", "Manual"],
+                    !isEditingProduct
+                  )}
+                  {field("Allowed OAuth scopes", productOauthScopes, setProductOauthScopes, "Allowed OAuth scope", "text", !isEditingProduct)}
+                  <div className="product-form-divider" aria-hidden="true" />
+                  <div className="quota-fields">
+                    <input
+                      value={productQuotaLimit}
+                      onChange={(event) => setProductQuotaLimit(event.target.value)}
+                      placeholder="API quota limit"
+                      disabled={!isEditingProduct}
+                      aria-label="API quota limit"
+                    />
+                    <span>Request every</span>
+                    <input
+                      value={productQuotaInterval}
+                      onChange={(event) => setProductQuotaInterval(event.target.value)}
+                      placeholder="Time interval"
+                      disabled={!isEditingProduct}
+                      aria-label="Time interval"
+                    />
+                    <select
+                      value={productQuotaUnit}
+                      onChange={(event) => setProductQuotaUnit(event.target.value)}
+                      disabled={!isEditingProduct}
+                      aria-label="Quota unit"
+                    >
+                      <option value="" disabled>Unit</option>
+                      {["second", "minute", "hour", "day", "month", "year"].map((unit) => (
+                        <option key={unit} value={unit}>{unit}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="product-form-divider" aria-hidden="true" />
+                <div className="product-settings-box proxy-settings-box">
+                  <select
+                    value={productProxy}
+                    onChange={(event) => setProductProxy(event.target.value)}
+                    disabled={!isEditingProduct}
+                    aria-label="API Proxy"
+                  >
+                    <option value="" disabled>API Proxy *</option>
+                    {proxyOptions.map((proxy) => <option key={proxy} value={proxy}>{proxy}</option>)}
+                  </select>
+                  <h4 className="proxy-operation-title">Operation</h4>
+                  <input
+                    value={productResourcePath}
+                    onChange={(event) => setProductResourcePath(event.target.value)}
+                    placeholder="Path *"
+                    disabled={!isEditingProduct}
+                    aria-label="Path"
+                  />
+                  <label className="field method-picker" ref={methodsDropdownRef}>
+                    <button
+                      type="button"
+                      className="method-picker-trigger"
+                      onClick={() => setMethodsDropdownOpen((open) => !open)}
+                      disabled={!isEditingProduct}
+                      aria-expanded={methodsDropdownOpen}
+                    >
+                      <span className={selectedProductMethods.length ? "method-picker-value" : "method-picker-placeholder"}>
+                        {selectedProductMethods.length ? selectedProductMethods.join(", ") : "Methods"}
+                      </span>
+                      <span aria-hidden="true">⌄</span>
+                    </button>
+                    {methodsDropdownOpen && (
+                      <div className="method-picker-menu">
+                        {methodOptions.map((method) => (
+                          <label key={method} className="method-picker-option">
+                            <input
+                              type="checkbox"
+                              checked={selectedProductMethods.includes(method)}
+                              onChange={() => toggleProductMethod(method)}
+                            />
+                            {method}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    <small className="method-picker-help">The HTTP methods allowed on the resource path. When none is specified, all methods are allowed.</small>
+                  </label>
+                </div>
               </div>
             ) : (
               <div className="form">
@@ -889,7 +1144,8 @@ export default function App() {
                   "Existing API Product",
                   existingProduct,
                   setExistingProduct,
-                  existingProducts
+                  existingProducts,
+                  !isEditingProduct
                 )}
               </div>
             )}
@@ -905,10 +1161,21 @@ export default function App() {
           <>
             <div className="section-title-row" id="developer-editor">
               <h3>D. Developer</h3>
-              {developerMode === "new" && (
-                <button className="edit-button" type="button" onClick={() => {
+              <button className="edit-button" type="button" onClick={() => {
                   if (isEditingDeveloper) {
+                    if (
+                      developerMode === "new" &&
+                      (!developerFirstName.trim() || !developerLastName.trim() || !developerEmail.trim() || !developerName.trim())
+                    ) {
+                      setDeveloperValidationAttempted(true);
+                      return;
+                    }
+                    if (developerMode === "new" && existingDevelopers.some((email) => email.trim().toLowerCase() === developerEmail.trim().toLowerCase())) {
+                      setNotice(`A Developer with email "${developerEmail}" already exists. Use a different email.`);
+                      return;
+                    }
                     setIsEditingDeveloper(false);
+                    setDeveloperValidationAttempted(false);
                     setNotice("");
                   } else {
                     setIsEditingDeveloper(true);
@@ -916,33 +1183,53 @@ export default function App() {
                 }}>
                   {isEditingDeveloper ? "Save" : "Edit"}
                 </button>
-              )}
             </div>
             <p>
               A Developer represents the consumer or partner
               registered in Apigee.
             </p>
 
-            {choose(developerMode, setDeveloperMode)}
+            {choose(developerMode, (mode) => {
+              setDeveloperMode(mode);
+              setIsEditingDeveloper(false);
+              setDeveloperValidationAttempted(false);
+            })}
 
             {developerMode === "new" ? (
               <div className="form">
                 {isEditingDeveloper && notice === unsavedChangesMessage && <p className="edit-required-message">Save your Developer changes before continuing.</p>}
-                {field(
-                  "Developer Username *",
-                  developerName,
-                  setDeveloperName,
-                  "",
+                {(notice === "Complete all required Developer fields before continuing." || notice === "Select an existing Developer before continuing." || notice.startsWith("A Developer with email")) && <p className="edit-required-message">{notice}</p>}
+                {developerField(
+                  "First Name *",
+                  developerFirstName,
+                  setDeveloperFirstName,
+                  "First name *",
                   "text",
-                  !isEditingDeveloper
+                  developerValidationAttempted && !developerFirstName.trim() ? "Enter developer's first name" : null
                 )}
-                {field(
-                  "Developer Email *",
+                {developerField(
+                  "Last Name *",
+                  developerLastName,
+                  setDeveloperLastName,
+                  "Last name *",
+                  "text",
+                  developerValidationAttempted && !developerLastName.trim() ? "Enter developer's last name" : null
+                )}
+                {developerField(
+                  "Email *",
                   developerEmail,
                   setDeveloperEmail,
-                  "",
+                  "Email *",
                   "email",
-                  !isEditingDeveloper
+                  developerValidationAttempted && !developerEmail.trim() ? "Enter developer's email" : null
+                )}
+                {developerField(
+                  "Username *",
+                  developerName,
+                  setDeveloperName,
+                  "Username *",
+                  "text",
+                  developerValidationAttempted && !developerName.trim() ? "Enter developer's username" : null
                 )}
               </div>
             ) : (
@@ -951,7 +1238,8 @@ export default function App() {
                   "Existing Developer",
                   existingDeveloper,
                   setExistingDeveloper,
-                  existingDevelopers
+                  existingDevelopers,
+                  !isEditingDeveloper
                 )}
               </div>
             )}
@@ -962,10 +1250,18 @@ export default function App() {
           <>
             <div className="section-title-row" id="app-editor">
               <h3>E. Developer App</h3>
-              {appMode === "new" && (
-                <button className="edit-button" type="button" onClick={() => {
+              <button className="edit-button" type="button" onClick={() => {
                   if (isEditingApp) {
+                    if (appMode === "new" && !appName.trim()) {
+                      setAppValidationAttempted(true);
+                      return;
+                    }
+                    if (appMode === "new" && existingApps.some((name) => name.trim().toLowerCase() === appName.trim().toLowerCase())) {
+                      setNotice(`A Developer App named "${appName}" already exists. Use a different name.`);
+                      return;
+                    }
                     setIsEditingApp(false);
+                    setAppValidationAttempted(false);
                     setNotice("");
                   } else {
                     setIsEditingApp(true);
@@ -973,19 +1269,23 @@ export default function App() {
                 }}>
                   {isEditingApp ? "Save" : "Edit"}
                 </button>
-              )}
             </div>
             <p>
               A Developer App represents the application that
               consumes the API and holds its credentials.
             </p>
 
-            {choose(appMode, setAppMode)}
+            {choose(appMode, (mode) => {
+              setAppMode(mode);
+              setIsEditingApp(false);
+            })}
 
             {appMode === "new" ? (
               <div className="form">
                 {isEditingApp && notice === unsavedChangesMessage && <p className="edit-required-message">Save your Developer App changes before continuing.</p>}
-                {field("App Name *", appName, setAppName, "", "text", !isEditingApp)}
+                {isEditingApp && appValidationAttempted && <p className="edit-required-message">Enter an App Name.</p>}
+                {notice.includes("Developer App") && notice !== unsavedChangesMessage && <p className="edit-required-message">{notice}</p>}
+                {field("App Name *", appName, setAppName, "App name", "text", !isEditingApp, appValidationAttempted && !appName.trim() ? "Enter app name" : null)}
               </div>
             ) : (
               <div className="form">
@@ -993,7 +1293,8 @@ export default function App() {
                   "Existing Developer App",
                   existingApp,
                   setExistingApp,
-                  existingApps
+                  existingApps,
+                  !isEditingApp
                 )}
               </div>
             )}
@@ -1271,7 +1572,23 @@ paths: {}`}
                     <h2>Step 2: API Details</h2>
                     <button className="edit-button" type="button" onClick={() => {
                       if (isEditingDetails) {
+                        if (!api.trim() || !display.trim() || !basePath.trim() || !version.trim() || !description.trim() || !env) {
+                          setDetailsValidationAttempted(true);
+                          setNotice("Complete all required API Details fields before saving.");
+                          return;
+                        }
+                        if (existingProxies.some((name) => name.trim().toLowerCase() === api.trim().toLowerCase())) {
+                          setDetailsValidationAttempted(true);
+                          setNotice(`A proxy named "${api}" already exists in ${env}. Use a different proxy name.`);
+                          return;
+                        }
+                        if (resources.basePaths.some((path) => path.replace(/\/$/, "") === basePath.trim().replace(/\/$/, ""))) {
+                          setDetailsValidationAttempted(true);
+                          setNotice(`The base path "${basePath}" is already deployed in ${env}. Use a different base path.`);
+                          return;
+                        }
                         setIsEditingDetails(false);
+                        setDetailsValidationAttempted(false);
                         setNotice("");
                       } else {
                         setIsEditingDetails(true);
@@ -1288,19 +1605,23 @@ paths: {}`}
                   {isEditingDetails && notice === unsavedChangesMessage && (
                     <p className="edit-required-message">Save your API details before continuing.</p>
                   )}
+                  {isEditingDetails && detailsValidationAttempted && (
+                    <p className="edit-required-message">{notice || "Complete all required API Details fields before saving."}</p>
+                  )}
 
                   <div className="form">
-                    {field("Proxy Name *", api, setApi, "", "text", !isEditingDetails)}
-                    {field("Display Name *", display, setDisplay, "", "text", !isEditingDetails)}
-                    {field("Base Path *", basePath, setBasePath, "", "text", !isEditingDetails)}
-                    {field("API Version *", version, setVersion, "", "text", !isEditingDetails)}
-                    {field("Description *", description, setDescription, "", "text", !isEditingDetails)}
+                    {field("Proxy Name *", api, setApi, "", "text", !isEditingDetails, detailsValidationAttempted && !api.trim() ? "Enter proxy name" : null)}
+                    {field("Display Name *", display, setDisplay, "", "text", !isEditingDetails, detailsValidationAttempted && !display.trim() ? "Enter display name" : null)}
+                    {field("Base Path *", basePath, setBasePath, "", "text", !isEditingDetails, detailsValidationAttempted && !basePath.trim() ? "Enter base path" : null)}
+                    {field("API Version *", version, setVersion, "", "text", !isEditingDetails, detailsValidationAttempted && !version.trim() ? "Enter API version" : null)}
+                    {field("Description *", description, setDescription, "", "text", !isEditingDetails, detailsValidationAttempted && !description.trim() ? "Enter description" : null)}
                     {select(
                       "Environment *",
                       env,
                       setEnv,
                       environments,
-                      !isEditingDetails
+                      !isEditingDetails,
+                      detailsValidationAttempted && !env ? "Select environment" : null
                     )}
                     {field("Owning Team", owningTeam, setOwningTeam, "", "text", !isEditingDetails)}
                     {field("Contact Email", contactEmail, setContactEmail, "", "email", !isEditingDetails)}
@@ -1500,10 +1821,18 @@ paths: {}`}
               <>
                 <div className="section-title-row" id="target-editor">
                   <h2>Step 4: Target & Backend Configuration</h2>
-                  {targetMode === "new" && (
-                    <button className="edit-button" type="button" onClick={() => {
+                  <button className="edit-button" type="button" onClick={() => {
                       if (isEditingTarget) {
+                        if (targetMode === "new" && (!newTarget.trim() || !backend.trim() || !targetPort.trim() || !targetProtocol)) {
+                          setTargetValidationAttempted(true);
+                          return;
+                        }
+                        if (targetMode === "new" && targets.some((name) => name.trim().toLowerCase() === newTarget.trim().toLowerCase())) {
+                          setNotice(`A Target Server named "${newTarget}" already exists in ${env}. Use a different name.`);
+                          return;
+                        }
                         setIsEditingTarget(false);
+                        setTargetValidationAttempted(false);
                         setNotice("");
                       } else {
                         setIsEditingTarget(true);
@@ -1511,14 +1840,16 @@ paths: {}`}
                     }}>
                       {isEditingTarget ? "Save" : "Edit"}
                     </button>
-                  )}
                 </div>
                 <p>
                   Choose an existing Target Server or create
                   a new one for the selected environment.
                 </p>
 
-                {choose(targetMode, setTargetMode)}
+                {choose(targetMode, (mode) => {
+                  setTargetMode(mode);
+                  setIsEditingTarget(false);
+                })}
 
                 {targetMode === "existing" ? (
                   <div className="form">
@@ -1526,12 +1857,15 @@ paths: {}`}
                       "Existing Target Server",
                       target,
                       setTarget,
-                      targets
+                      targets,
+                      !isEditingTarget
                     )}
                   </div>
                 ) : (
                   <div className="form target-server-form">
                     {isEditingTarget && notice === unsavedChangesMessage && <p className="edit-required-message">Save your Target Server changes before continuing.</p>}
+                    {isEditingTarget && targetValidationAttempted && <p className="edit-required-message">Complete all required Target Server fields.</p>}
+                    {notice.includes("Target Server") && notice !== unsavedChangesMessage && <p className="edit-required-message">{notice}</p>}
                     {field(
                       "Target Server Name *",
                       newTarget,

@@ -47,6 +47,8 @@ export type RequestDetail = RequestSummary & {
 };
 
 export type ResourceCatalog = {
+  proxies: string[];
+  basePaths: string[];
   targets: string[];
   products: string[];
   developers: string[];
