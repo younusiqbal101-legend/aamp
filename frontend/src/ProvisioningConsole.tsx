@@ -99,8 +99,13 @@ export default function ProvisioningConsole({
 
         <span
           className={`pipeline-status ${
-            isFinished ? "status-completed" : "status-running"
+            isComplete
+              ? "status-completed"
+              : isFailed
+                ? "status-failed"
+                : "status-running"
           }`}
+          role="status"
         >
           <span className="status-dot" />
           {isComplete
@@ -110,6 +115,42 @@ export default function ProvisioningConsole({
               : "PROVISIONING IN PROGRESS"}
         </span>
       </div>
+
+      <ol className="provisioning-tracker" aria-label="Request stages">
+        <li className="is-done">
+          <i aria-hidden="true">✓</i>
+          Submitted to CI/CD
+        </li>
+        <li
+          className={
+            isFailed ? "is-failed" : isComplete ? "is-done" : "is-active"
+          }
+          aria-current={isFinished ? undefined : "step"}
+        >
+          <i aria-hidden="true">{isFailed ? "✕" : isComplete ? "✓" : "…"}</i>
+          {isFailed ? "Provisioning failed" : isComplete ? "Provisioned" : "Provisioning in progress"}
+        </li>
+        <li
+          className={
+            isComplete ? "is-done" : isFailed ? "is-failed" : ""
+          }
+        >
+          <i aria-hidden="true">{isComplete ? "✓" : isFailed ? "✕" : "○"}</i>
+          {isComplete ? "Completed" : isFailed ? "Stopped" : "Awaiting result"}
+        </li>
+      </ol>
+
+      {isFailed && (
+        <section className="failure-card" aria-labelledby="failure-title">
+          <div>
+            <h2 id="failure-title">Provisioning did not complete</h2>
+            <p>
+              Check the execution logs below for the step that failed. Your
+              request is kept in My Requests, where you can review it.
+            </p>
+          </div>
+        </section>
+      )}
 
       <div className="provisioning-summary">
         <div className="summary-item">
