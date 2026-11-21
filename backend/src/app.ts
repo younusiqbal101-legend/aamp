@@ -54,7 +54,7 @@ app.get("/api/environments", async (_req, res) => {
 });
 
 app.get("/api/resources", async (req, res) => {
-  const env = str(req.query.env, "dev");
+  const env = str(req.query.env);
   if (!isValidEnvironmentName(env)) {
     throw new HttpError(400, "env is not a valid environment name.");
   }
@@ -131,6 +131,8 @@ function toPayload(body: Record<string, unknown>): RequestPayload {
     developer: {
       mode: str(developer.mode, "new"),
       name: str(developer.name),
+      firstName: str(developer.firstName),
+      lastName: str(developer.lastName),
       email: str(developer.email),
     },
     developerApp: { mode: str(developerApp.mode, "new"), name: str(developerApp.name) },

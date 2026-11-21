@@ -42,7 +42,7 @@ export interface RequestPayload {
     quotaUnit?: string;
     oauthScopes?: string;
   };
-  developer: { mode: string; name: string; email: string };
+  developer: { mode: string; name: string; firstName?: string; lastName?: string; email: string };
   developerApp: { mode: string; name: string };
   target: {
     mode: string;
