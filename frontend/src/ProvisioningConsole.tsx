@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Check, CircleCheck, X } from "lucide-react";
 import {
   api,
   type ProviderInfo,
@@ -160,7 +161,7 @@ export default function ProvisioningConsole({
               <div
                 className={`operation-indicator indicator-${operation.status.toLowerCase()}`}
               >
-                {operation.status === "SUCCESS" && "✓"}
+                {operation.status === "SUCCESS" && <Check size={14} strokeWidth={2.5} aria-hidden="true" />}
 
                 {operation.status === "IN_PROGRESS" && (
                   <span className="loading-spinner" />
@@ -168,7 +169,7 @@ export default function ProvisioningConsole({
 
                 {operation.status === "PENDING" && index + 1}
 
-                {operation.status === "FAILED" && "✕"}
+                {operation.status === "FAILED" && <X size={14} strokeWidth={2.5} aria-hidden="true" />}
               </div>
 
               <div className="operation-details">
@@ -230,7 +231,7 @@ export default function ProvisioningConsole({
 
       {isComplete && (
         <section className="acknowledgement-card">
-          <div className="acknowledgement-icon">✓</div>
+          <div className="acknowledgement-icon"><CircleCheck size={28} aria-hidden="true" /></div>
 
           <div>
             {provider?.mode === "apigee" && provider.dryRun ? (

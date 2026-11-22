@@ -1,5 +1,35 @@
 
 import ProvisioningConsole from './ProvisioningConsole';
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
+  Inbox,
+  Bell,
+  Check,
+  ChevronDown,
+  Circle,
+  CircleAlert,
+  CircleCheck,
+  ClipboardList,
+  Eye,
+  FilePlus,
+  GitBranch,
+  Layers,
+  LayoutDashboard,
+  Menu,
+  Moon,
+  Package,
+  Plus,
+  Search,
+  Server,
+  Sun,
+  Upload,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { type ParsedOpenApiSpec } from "./openApiParser";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -40,26 +70,23 @@ type SidebarIconName =
   | "servers"
   | "flows";
 
-const sidebarIconPaths: Record<SidebarIconName, string> = {
-  dashboard: "M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z",
-  create: "M12 5v14M5 12h14",
-  publish: "M12 16V4m0 0-4 4m4-4 4 4M5 16v3h14v-3",
-  resources: "M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
-  approve: "m5 12 4 4L19 6",
-  requests: "M7 3h10v18H7zM9 3.5h6v3H9zM10 11h4m-4 4h4",
-  proxies: "M4 5h6v6H4zm10 8h6v6h-6zM10 8h4m-2 0v6",
-  products: "M3 7V4h9l8 8-5 5-8-8Zm5 0h.01",
-  consumers: "M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2m14-6a3 3 0 1 0 0-6m-5 3a3 3 0 1 0-6 0",
-  servers: "M4 4h16v6H4zm0 10h16v6H4zm3-7h.01m0 10h.01",
-  flows: "M5 7h10m0 0-3-3m3 3-3 3M19 17H9m0 0 3-3m-3 3 3 3",
+const sidebarIcons: Record<SidebarIconName, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  create: Plus,
+  publish: Upload,
+  resources: Eye,
+  approve: CircleCheck,
+  requests: ClipboardList,
+  proxies: Layers,
+  products: Package,
+  consumers: Users,
+  servers: Server,
+  flows: GitBranch,
 };
 
 function SidebarIcon({ name }: { name: SidebarIconName }) {
-  return (
-    <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path d={sidebarIconPaths[name]} />
-    </svg>
-  );
+  const Icon = sidebarIcons[name];
+  return <Icon className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" />;
 }
 
 const steps = [
@@ -71,12 +98,39 @@ const steps = [
   "Review & Submit",
 ];
 
+const homeCardIcons: LucideIcon[] = [FilePlus, Upload, Eye, CircleCheck];
+
 const unsavedChangesMessage = "Save your changes before continuing.";
+
+// The signed-in user. This portal has no login yet, so this is a placeholder: set your name and email here.
+const portalUser: { name: string; email: string | null } = { name: "Portal user", email: null };
+const portalUserInitials = portalUser.name
+  .split(/s+/)
+  .filter(Boolean)
+  .map((part) => part[0])
+  .join("")
+  .slice(0, 2)
+  .toUpperCase();
+
+// Empty state used inside tables: icon, short message and an optional action.
+function TableEmpty({ title, text, action }: { title: string; text: string; action?: ReactNode }) {
+  return (
+    <div className="table-empty">
+      <Inbox size={28} strokeWidth={1.6} aria-hidden="true" />
+      <strong>{title}</strong>
+      <span>{text}</span>
+      {action}
+    </div>
+  );
+}
 
 export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [step, setStep] = useState(0);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // On phones the sidebar starts hidden and opens as an overlay from the menu button.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => window.matchMedia("(max-width: 900px)").matches
+  );
   const [darkMode, setDarkMode] = useState(false);
   const [openTopMenu, setOpenTopMenu] = useState<"notifications" | "profile" | null>(null);
   const topMenuRef = useRef<HTMLDivElement>(null);
@@ -84,12 +138,33 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [catalogQuery, setCatalogQuery] = useState("");
   const [methodsDropdownOpen, setMethodsDropdownOpen] = useState(false);
+  const [headerQuery, setHeaderQuery] = useState("");
+  const [resourcesLoaded, setResourcesLoaded] = useState(false);
+  // Command palette (Ctrl+K / Cmd+K): a centred page search.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [paletteIndex, setPaletteIndex] = useState(0);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+        setPaletteQuery("");
+        setPaletteIndex(0);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+  const [requestSort, setRequestSort] = useState<{ key: "id" | "apiName" | "status"; dir: "asc" | "desc" }>({ key: "id", dir: "asc" });
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Each wizard step is a new screen. Reset the document position after React
   // has rendered it so users always begin at the top of that step.
   useEffect(() => {
     if (page === "create") {
-      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document.querySelector("main")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
     }
   }, [page, step]);
 
@@ -295,7 +370,8 @@ export default function App() {
       .catch((error: unknown) => {
         setResources({ proxies: [], basePaths: [], targets: [], products: [], developers: [], apps: [], sharedFlows: {} });
         setNotice(error instanceof Error ? error.message : "Could not load Apigee resources.");
-      });
+      })
+      .finally(() => setResourcesLoaded(true));
   }, [env, environmentsLoaded]);
 
   // Refresh request history whenever the page is opened.
@@ -409,7 +485,7 @@ export default function App() {
         placeholder={placeholder}
         disabled={disabled}
       />
-      {error && <small className="field-error">● {error}</small>}
+      {error && <small className="field-error"><CircleAlert size={14} aria-hidden="true" /> {error}</small>}
     </label>
   );
 
@@ -431,7 +507,7 @@ export default function App() {
         disabled={!isEditingDeveloper}
         aria-invalid={Boolean(error)}
       />
-      {error && <small className="field-error">● {error}</small>}
+      {error && <small className="field-error"><CircleAlert size={14} aria-hidden="true" /> {error}</small>}
     </label>
   );
 
@@ -458,7 +534,7 @@ export default function App() {
           </option>
         ))}
       </select>
-      {error && <small className="field-error">● {error}</small>}
+      {error && <small className="field-error"><CircleAlert size={14} aria-hidden="true" /> {error}</small>}
     </label>
   );
 
@@ -470,16 +546,20 @@ export default function App() {
     );
   };
 
-  const title = (heading: string, subtitle: string) => (
+  // Page header row: title on the left, optional primary action and the org chip on the right.
+  const title = (heading: string, subtitle: string, action?: ReactNode) => (
     <div className="heading">
       <div>
         <small>APIGEE DEVELOPER PORTAL</small>
         <h1>{heading}</h1>
         <p>{subtitle}</p>
       </div>
-      <span className="env">
-        Apigee X · {env.toUpperCase()}
-      </span>
+      <div className="heading-actions">
+        {action}
+        <span className="env">
+          Apigee X · {env.toUpperCase()}
+        </span>
+      </div>
     </div>
   );
 
@@ -512,10 +592,16 @@ export default function App() {
     </section>
   );
 
+  // On phones the sidebar is an overlay: close it once a page is chosen.
+  const closeSidebarOnSmallScreen = () => {
+    if (window.matchMedia("(max-width: 900px)").matches) setSidebarCollapsed(true);
+  };
+
   const goCreate = () => {
     setPage("create");
     setStep(0);
     setNotice("");
+    closeSidebarOnSmallScreen();
   };
 
   const next = () => {
@@ -693,10 +779,14 @@ export default function App() {
   const nav = (label: string, destination: Page, icon: SidebarIconName) => (
     <button
       className={`nav ${page === destination ? "active" : ""}`}
-      onClick={() => setPage(destination)}
+      title={label}
+      onClick={() => {
+        setPage(destination);
+        closeSidebarOnSmallScreen();
+      }}
     >
       <SidebarIcon name={icon} />
-      {label}
+      <span className="nav-label">{label}</span>
     </button>
   );
 
@@ -981,11 +1071,11 @@ export default function App() {
               <h3>C. API Product</h3>
               <button className="edit-button" type="button" onClick={() => {
                   if (isEditingProduct) {
-                    if (!productName.trim() || !productDisplayName.trim() || !productEnvironment || !productAccess || !productApproval || !productProxy || !productResourcePath.trim()) {
+                    if (productMode === "new" && (!productName.trim() || !productDisplayName.trim() || !productEnvironment || !productAccess || !productApproval || !productProxy || !productResourcePath.trim())) {
                       setProductValidationAttempted(true);
                       return;
                     }
-                    if (existingProducts.some((name) => name.trim().toLowerCase() === productName.trim().toLowerCase())) {
+                    if (productMode === "new" && existingProducts.some((name) => name.trim().toLowerCase() === productName.trim().toLowerCase())) {
                       setNotice(`An API Product named "${productName}" already exists. Use a different name.`);
                       return;
                     }
@@ -1118,7 +1208,7 @@ export default function App() {
                       <span className={selectedProductMethods.length ? "method-picker-value" : "method-picker-placeholder"}>
                         {selectedProductMethods.length ? selectedProductMethods.join(", ") : "Methods"}
                       </span>
-                      <span aria-hidden="true">⌄</span>
+                      <span aria-hidden="true"><ChevronDown size={16} /></span>
                     </button>
                     {methodsDropdownOpen && (
                       <div className="method-picker-menu">
@@ -1390,7 +1480,7 @@ export default function App() {
                 }
               }}
             >
-              <b>{index < step ? "✓" : index + 1}</b>
+              <b>{index < step ? <Check size={16} strokeWidth={2.4} aria-hidden="true" /> : index + 1}</b>
               <span>{stepName}</span>
             </button>
           ))}
@@ -1436,7 +1526,7 @@ export default function App() {
                     }}
                   />
 
-                  <strong>⇧</strong>
+                  <strong><Upload size={24} aria-hidden="true" /></strong>
                   <b>Upload OpenAPI YAML file</b>
                   <span>
                     or <em>Choose File</em>
@@ -1536,7 +1626,7 @@ paths: {}`}
 
                 {valid && parsedSpec && (
                   <div className="openapi-success">
-                    <strong>✓ OpenAPI document parsed</strong>
+                    <strong><CircleCheck size={16} aria-hidden="true" /> OpenAPI document parsed</strong>
                     <span>
                       {parsedSpec.resources.length} resources ·{" "}
                       {parsedSpec.totalOperations} operations ·{" "}
@@ -1552,7 +1642,7 @@ paths: {}`}
                 <h3>Validation checks</h3>
                 <ul className={valid ? "validation-list is-valid" : "validation-list"}>
                   {["OpenAPI version", "API title and description", "Paths and operations", "Request and response schemas", "Organization naming rules"].map((check) => (
-                    <li key={check}><i>{valid ? "✓" : "○"}</i>{check}</li>
+                    <li key={check}><i>{valid ? <Check size={16} aria-hidden="true" /> : <Circle size={16} aria-hidden="true" />}</i>{check}</li>
                   ))}
                 </ul>
                 <small>{valid ? "All checks passed" : "Upload and validate YAML to run these checks."}</small>
@@ -2136,7 +2226,7 @@ paths: {}`}
               setNotice("");
             }}
           >
-            ← Back
+            <ArrowLeft size={16} aria-hidden="true" /> Back
           </button>
 
           <div>
@@ -2155,7 +2245,7 @@ paths: {}`}
               </button>
             ) : (
               <button className="primary" onClick={submit} disabled={submitting}>
-                {submitting ? "Submitting…" : "Submit Request →"}
+                {submitting ? "Submitting…" : <>Submit Request <ArrowRight size={16} aria-hidden="true" /></>}
               </button>
             )}
           </div>
@@ -2163,6 +2253,27 @@ paths: {}`}
       </>
     );
   }
+
+  // Header search: jumps to a page. It does not query Apigee.
+  const headerPageLinks: { label: string; go: () => void }[] = [
+    { label: "Dashboard", go: () => setPage("home") },
+    { label: "Create API", go: goCreate },
+    { label: "Publish API", go: () => setPage("publish") },
+    { label: "Access / Read Only", go: () => setPage("resources") },
+    { label: "Approve Requests", go: () => setPage("approve") },
+    { label: "My requests", go: () => setPage("requests") },
+  ];
+  const headerMatches = headerQuery.trim()
+    ? headerPageLinks.filter((item) =>
+        item.label.toLowerCase().includes(headerQuery.trim().toLowerCase())
+      )
+    : [];
+  const openHeaderPage = (item: { go: () => void }) => {
+    item.go();
+    closeSidebarOnSmallScreen();
+    setHeaderQuery("");
+    setSearchOpen(false);
+  };
 
   return (
     <div className={`shell ${darkMode ? "dark-mode" : ""}`}>
@@ -2175,17 +2286,11 @@ paths: {}`}
             aria-label="Toggle navigation"
             title="Toggle navigation"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
+            <Menu size={20} strokeWidth={1.8} aria-hidden="true" />
           </button>
           <div className="brand">
-            <b>AX</b>
             <span>Apigee <em>Control Center</em></span>
           </div>
-        </div>
-
-        <div className="top-right" ref={topMenuRef}>
           <span className="connection">
             <i aria-hidden="true" />
             {backendInfo?.mode === "apigee"
@@ -2194,6 +2299,64 @@ paths: {}`}
                 ? "Backend offline"
                 : "Backend connected"}
           </span>
+        </div>
+
+        <div
+          className={`header-search ${searchOpen ? "is-open" : ""}`}
+          role="search"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+              setHeaderQuery("");
+              setSearchOpen(false);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setHeaderQuery("");
+              setSearchOpen(false);
+            }
+          }}
+        >
+          <button
+            type="button"
+            className="search-toggle"
+            aria-label={searchOpen ? "Close search" : "Open search"}
+            aria-expanded={searchOpen}
+            onClick={() => setSearchOpen((open) => !open)}
+          >
+            <Search size={18} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+          <label className="search-field">
+            <span className="sr-only">Search pages</span>
+            <Search size={18} strokeWidth={1.8} aria-hidden="true" />
+            <input
+              type="search"
+              value={headerQuery}
+              onChange={(event) => setHeaderQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && headerMatches[0]) {
+                  openHeaderPage(headerMatches[0]);
+                }
+              }}
+              placeholder="Search pages"
+              autoComplete="off"
+              aria-controls="header-search-results"
+            />
+          </label>
+          {headerMatches.length > 0 && (
+            <ul className="search-results" id="header-search-results">
+              {headerMatches.map((item) => (
+                <li key={item.label}>
+                  <button type="button" onClick={() => openHeaderPage(item)}>
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="top-right" ref={topMenuRef}>
           <button
             type="button"
             className="toolbar-icon"
@@ -2202,9 +2365,9 @@ paths: {}`}
             title={darkMode ? "Use light theme" : "Use dark theme"}
           >
             {darkMode ? (
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2m10-10h-2M4 12H2m17.1-7.1-1.4 1.4M6.3 17.7l-1.4 1.4m14.2 0-1.4-1.4M6.3 6.3 4.9 4.9" /></svg>
+              <Sun size={18} strokeWidth={1.8} aria-hidden="true" />
             ) : (
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" /></svg>
+              <Moon size={18} strokeWidth={1.8} aria-hidden="true" />
             )}
           </button>
           <button
@@ -2215,7 +2378,7 @@ paths: {}`}
             aria-expanded={openTopMenu === "notifications"}
             title="Notifications"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
+            <Bell size={18} strokeWidth={1.8} aria-hidden="true" />
             <i aria-hidden="true" />
           </button>
           <button
@@ -2226,7 +2389,7 @@ paths: {}`}
             aria-expanded={openTopMenu === "profile"}
             title="Profile"
           >
-            JD
+            {portalUserInitials}
           </button>
 
           {openTopMenu === "notifications" && (
@@ -2245,14 +2408,27 @@ paths: {}`}
           )}
 
           {openTopMenu === "profile" && (
-            <section className="top-menu profile-menu" aria-label="Profile menu">
+            <section className="top-menu profile-menu" aria-label="Account menu">
               <div className="profile-summary">
-                <span className="profile-avatar-large">JD</span>
-                <div><strong>Jane Developer</strong><small>developer@company.com</small></div>
+                <span className="profile-avatar-large">{portalUserInitials}</span>
+                <div>
+                  <strong>{portalUser.name}</strong>
+                  <small>{portalUser.email ?? "Signed in to this portal"}</small>
+                </div>
               </div>
-              <button type="button" className="profile-menu-item" onClick={() => setOpenTopMenu(null)}>Manage your account</button>
-              <button type="button" className="profile-menu-item" onClick={() => setOpenTopMenu(null)}>Settings</button>
-              <button type="button" className="profile-menu-item sign-out" onClick={() => { setPage("home"); setOpenTopMenu(null); }}>Sign out</button>
+              <div className="profile-section-label">Organisation</div>
+            <div className="profile-org">
+                <CircleCheck size={18} aria-hidden="true" className={backendInfo?.mode === "apigee" ? "is-connected" : "is-offline"} />
+                <div>
+                  <strong>{backendInfo?.org ?? "Not connected"}</strong>
+                  <small>
+                    {backendInfo?.mode === "apigee"
+                      ? `Apigee X · ${env.toUpperCase() || "—"}${backendInfo.dryRun ? " · dry run" : ""}`
+                      : "Backend offline"}
+                  </small>
+                </div>
+              </div>
+              <p className="profile-note">Only one organisation is connected to this portal.</p>
             </section>
           )}
         </div>
@@ -2273,9 +2449,10 @@ paths: {}`}
 
         <button
           className={`nav create-nav ${page === "create" ? "active" : ""}`}
+          title="Create API"
           onClick={goCreate}
         >
-          <SidebarIcon name="create" /> Create API
+          <SidebarIcon name="create" /><span className="nav-label">Create API</span>
         </button>
 
         {nav("Publish API", "publish", "publish")}
@@ -2288,27 +2465,36 @@ paths: {}`}
 
         <hr />
 
-        <button className="nav" onClick={() => setPage("resources")}>
-          ▱ API Proxies
+        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+          <Layers className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">API Proxies</span>
         </button>
 
-        <button className="nav" onClick={() => setPage("resources")}>
-          ⬡ API Products
+        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+          <Package className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">API Products</span>
         </button>
 
-        <button className="nav" onClick={() => setPage("resources")}>
-          ♙ Consumers
+        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+          <Users className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">Consumers</span>
         </button>
 
-        <button className="nav" onClick={() => setPage("resources")}>
-          ▤ Target Servers
+        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+          <Server className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">Target Servers</span>
         </button>
 
-        <button className="nav" onClick={() => setPage("resources")}>
-          ◷ Shared Flows
+        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+          <GitBranch className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">Shared Flows</span>
         </button>
 
       </aside>
+
+      {/* Phone/tablet: tapping outside the open sidebar closes it. */}
+      {!sidebarCollapsed && (
+        <div
+          className="sidebar-backdrop"
+          aria-hidden="true"
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      )}
 
       <main>
         {page === "create" ? (
@@ -2371,10 +2557,10 @@ paths: {}`}
                         )
                   }
                 >
-                  <i>{["⌘", "⇧", "◎", "◇"][index]}</i>
+                  <i>{(() => { const Icon = homeCardIcons[index]; return <Icon size={22} strokeWidth={1.8} aria-hidden="true" />; })()}</i>
                   <h2>{card[0]}</h2>
                   <p>{card[1]}</p>
-                  <b>{card[2]} →</b>
+                  <b>{card[2]} <ArrowRight size={14} aria-hidden="true" /></b>
                 </button>
               ))}
             </section>
@@ -2389,8 +2575,8 @@ paths: {}`}
               </div>
 
               <div className="metrics-grid">
-                <div className="metric"><span>API Products</span><strong>{existingProducts.length}</strong><small>Available in Apigee</small></div>
-                <div className="metric"><span>Target Servers</span><strong>{targets.length}</strong><small>Available in {env || "the selected environment"}</small></div>
+                <div className="metric"><span>API Products</span><strong>{resourcesLoaded ? existingProducts.length : <span className="skeleton skeleton-num" aria-label="Loading" />}</strong><small>Available in Apigee</small></div>
+                <div className="metric"><span>Target Servers</span><strong>{resourcesLoaded ? targets.length : <span className="skeleton skeleton-num" aria-label="Loading" />}</strong><small>Available in {env || "the selected environment"}</small></div>
                 <div className="metric"><span>Requests in progress</span><strong>{requests.filter((item) => item.status === "PROVISIONING").length}</strong><small>Live provisioning status</small></div>
                 <div className="metric"><span>Pending drafts</span><strong>{requests.filter((item) => item.status === "DRAFT").length}</strong><small>Awaiting submission</small></div>
               </div>
@@ -2412,7 +2598,7 @@ paths: {}`}
                   </thead>
                   <tbody>
                     {requests.length === 0 ? (
-                      <tr><td colSpan={5}>No requests yet.</td></tr>
+                      <tr><td colSpan={5}><TableEmpty title="No requests yet" text="Your onboarding requests will appear here." /></td></tr>
                     ) : requests.slice(0, 5).map((item) => (
                       <tr key={item.id}>
                         <td>{item.id}</td><td>{item.apiName}</td><td>Create API</td>
@@ -2430,7 +2616,8 @@ paths: {}`}
           <>
             {title(
               "My Requests",
-              "Track drafts, submitted requests and provisioning progress."
+              "Track drafts, submitted requests and provisioning progress.",
+              <button className="primary" type="button" onClick={goCreate}>+ Create API</button>
             )}
 
             {panel(
@@ -2439,19 +2626,42 @@ paths: {}`}
                 <table>
                   <thead>
                     <tr>
-                      <th>Request ID</th>
-                      <th>API</th>
-                      <th>Type</th>
-                      <th>Status</th>
+                      {([["id", "Request ID"], ["apiName", "API"], ["type", "Type"], ["status", "Status"]] as const).map(([key, label]) => {
+                        const sortable = key !== "type";
+                        const active = requestSort.key === key;
+                        const Icon = !sortable || !active ? ArrowUpDown : requestSort.dir === "asc" ? ArrowUp : ArrowDown;
+                        return (
+                          <th key={key} aria-sort={active ? (requestSort.dir === "asc" ? "ascending" : "descending") : undefined}>
+                            {sortable ? (
+                              <button
+                                type="button"
+                                className="sort-button"
+                                onClick={() => setRequestSort((current) => ({ key: key as "id" | "apiName" | "status", dir: current.key === key && current.dir === "asc" ? "desc" : "asc" }))}
+                              >
+                                {label}
+                                <Icon size={14} aria-hidden="true" />
+                              </button>
+                            ) : (
+                              label
+                            )}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
                     {requests.length === 0 && (
                       <tr>
-                        <td colSpan={4}>No requests yet.</td>
+                        <td colSpan={4}><TableEmpty title="No requests yet" text="Create an API to start your first onboarding request." action={<button className="primary" type="button" onClick={goCreate}>+ Create API</button>} /></td>
                       </tr>
                     )}
-                    {requests.map((item) => (
+                    {[...requests]
+                      .sort((a, b) => {
+                        const pick = (r: RequestSummary) => (requestSort.key === "apiName" ? r.apiName : requestSort.key === "status" ? r.status : r.id);
+                        const result = String(pick(a)).localeCompare(String(pick(b)), undefined, { numeric: true });
+                        return requestSort.dir === "asc" ? result : -result;
+                      })
+                      .map((item) => (
                       <tr key={item.id}>
                         <td>{item.id}</td>
                         <td>{item.apiName}</td>
@@ -2538,7 +2748,7 @@ paths: {}`}
                     )
                   }
                 >
-                  Review Publish →
+                  Review Publish <ArrowRight size={16} aria-hidden="true" />
                 </button>
 
                 <p>{notice}</p>
@@ -2568,7 +2778,7 @@ paths: {}`}
                   </thead>
                   <tbody>
                     {requests.filter((item) => item.status === "DRAFT").length === 0 && (
-                      <tr><td colSpan={4}>No requests are awaiting review.</td></tr>
+                      <tr><td colSpan={4}><TableEmpty title="Nothing waiting for review" text="New onboarding requests will appear here for approval." /></td></tr>
                     )}
                     {requests.filter((item) => item.status === "DRAFT").map((item) => (
                       <tr key={item.id}>
@@ -2594,6 +2804,73 @@ paths: {}`}
           </>
         )}
       </main>
+
+      {paletteOpen && (() => {
+        const matches = headerPageLinks.filter((item) =>
+          item.label.toLowerCase().includes(paletteQuery.trim().toLowerCase())
+        );
+        const choose = (item: { go: () => void }) => {
+          openHeaderPage(item);
+          setPaletteOpen(false);
+        };
+        return (
+          <div className="palette-backdrop" onMouseDown={() => setPaletteOpen(false)}>
+            <div
+              className="palette"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Search pages"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <input
+                autoFocus
+                className="palette-input"
+                placeholder="Search pages"
+                value={paletteQuery}
+                onChange={(event) => {
+                  setPaletteQuery(event.target.value);
+                  setPaletteIndex(0);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setPaletteIndex((i) => Math.min(i + 1, matches.length - 1));
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setPaletteIndex((i) => Math.max(i - 1, 0));
+                  } else if (event.key === "Enter" && matches[paletteIndex]) {
+                    choose(matches[paletteIndex]);
+                  } else if (event.key === "Escape") {
+                    setPaletteOpen(false);
+                  }
+                }}
+                aria-controls="palette-results"
+                aria-label="Search pages"
+              />
+              <ul className="palette-list" id="palette-results" role="listbox">
+                {matches.map((item, index) => (
+                  <li key={item.label} role="option" aria-selected={index === paletteIndex}>
+                    <button
+                      type="button"
+                      className={index === paletteIndex ? "is-active" : ""}
+                      onMouseEnter={() => setPaletteIndex(index)}
+                      onClick={() => choose(item)}
+                    >
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {matches.length === 0 && <p className="palette-empty">No pages match “{paletteQuery}”.</p>}
+              <div className="palette-footer">
+                <span>↑ ↓ to move</span>
+                <span>Enter to open</span>
+                <span>Esc to close</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
