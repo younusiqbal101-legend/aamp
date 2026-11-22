@@ -2291,6 +2291,7 @@ paths: {}`}
           <div className="brand">
             <span>Apigee <em>Control Center</em></span>
           </div>
+          {/* Org chip hidden for now.
           <span className="connection">
             <i aria-hidden="true" />
             {backendInfo?.mode === "apigee"
@@ -2299,6 +2300,7 @@ paths: {}`}
                 ? "Backend offline"
                 : "Backend connected"}
           </span>
+          */}
         </div>
 
         <div
