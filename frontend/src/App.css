@@ -4639,3 +4639,11 @@ button.secondary:active:not(:disabled),
   }
 }
 
+
+/* Top-bar search: about the same width as the Google Cloud console search (692px), centred in the bar. */
+.header-search {
+  flex: 0 1 692px;
+  width: 692px;
+  max-width: 100%;
+  margin: 0 auto;
+}
