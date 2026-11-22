@@ -3388,3 +3388,1254 @@ th { background: #e5ecf6; color: var(--cloud-navy); font-weight: 600; } td, th {
 .shell.dark-mode .steps span { color: #bdbdbd; }
 .shell.dark-mode .steps .current span,
 .shell.dark-mode .steps .done span { color: #fff; }
+
+
+/* Dark mode fixes: narrow overrides only; the light theme is unchanged. */
+.shell.dark-mode .product-settings-box {
+  background: #111a2e;
+  border-color: #2e3d63;
+}
+.shell.dark-mode .product-form-divider {
+  background: #2e3d63;
+}
+/* The dark select rule above uses a background shorthand that removed the caret. Restore it. */
+.shell.dark-mode select:not([multiple]) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23c7d2fe' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 10px 6px;
+}
+/* More dark-mode fixes: each one targets a specific element that was unreadable in dark mode. */
+.shell.dark-mode .product-settings-box .proxy-operation-title,
+.shell.dark-mode .proxy-operation-title {
+  color: #e2e8f0;
+}
+.shell.dark-mode .quota-fields span {
+  color: #a7b3c6;
+}
+.shell.dark-mode .method-picker-trigger {
+  background: #111a2e;
+  border-color: #3b4a68;
+  color: #e2e8f0;
+}
+.shell.dark-mode .method-picker-menu {
+  background: #111a2e;
+  border-color: #2e3d63;
+  color: #e2e8f0;
+}
+.shell.dark-mode .method-picker-option {
+  color: #e2e8f0;
+}
+.shell.dark-mode .panel p.edit-required-message {
+  background: #3b1518;
+  border-color: #7f1d1d;
+  color: #fecaca;
+}
+/* Top-bar connection pill: readable text in dark mode. */
+.shell.dark-mode .top-right > span:not(.avatar) {
+  color: #e2e8f0;
+  background: #1a2540;
+  border: 1px solid #2e3d63;
+}
+/* Table headers in dark mode. */
+.shell.dark-mode th {
+  background: #1a2540;
+  color: #e2e8f0;
+}
+
+/* Header: Google Cloud-style layout (org chip, page search, actions). */
+header {
+  gap: 16px;
+}
+
+.header-left {
+  min-width: 0;
+  gap: 12px;
+}
+
+.header-left .connection {
+  display: inline-flex;
+  align-items: center;
+  max-width: 260px;
+  padding: 6px 12px;
+  border: 1px solid #c7d5eb;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #3c4d66;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-search {
+  position: relative;
+  flex: 1 1 320px;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-search .search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #eef2f8;
+  color: #5f6368;
+}
+
+.header-search .search-field:focus-within {
+  background: #ffffff;
+  border-color: #174ea6;
+  box-shadow: 0 1px 4px #17345c26;
+}
+
+.header-search .search-field > svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.header-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #202124;
+  font-size: 14px;
+  outline: none;
+}
+
+.header-search input::placeholder {
+  color: #5f6368;
+  opacity: 1;
+}
+
+.search-toggle {
+  display: none;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #40516a;
+}
+
+.search-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid #c8d7ea;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px #17345c26;
+}
+
+.search-results button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #1c2f4a;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-results button:hover,
+.search-results button:focus-visible {
+  background: #eef4ff;
+  outline: 2px solid #174ea6;
+  outline-offset: -2px;
+}
+
+@media (max-width: 1100px) {
+  .header-left .connection {
+    max-width: 150px;
+  }
+}
+
+@media (max-width: 900px) {
+  .header-left .connection {
+    display: none;
+  }
+
+  .header-search {
+    max-width: 340px;
+  }
+}
+
+@media (max-width: 640px) {
+  .brand span {
+    display: none;
+  }
+
+  .header-search {
+    position: static;
+    flex: 0 0 auto;
+    max-width: none;
+    margin: 0 0 0 auto;
+  }
+
+  .header-search .search-field {
+    display: none;
+  }
+
+  .search-toggle {
+    display: grid;
+  }
+
+  .header-search.is-open {
+    position: fixed;
+    top: 72px;
+    left: 12px;
+    right: 12px;
+    z-index: 30;
+    margin: 0;
+  }
+
+  .header-search.is-open .search-field {
+    display: flex;
+    background: #ffffff;
+    border-color: #c8d7ea;
+  }
+}
+
+/* Dark mode for the header additions. */
+.shell.dark-mode .header-left .connection {
+  background: #1a2540;
+  border-color: #2e3d63;
+  color: #e2e8f0;
+}
+
+.shell.dark-mode .header-search .search-field {
+  background: #1a2540;
+  color: #a7b3c6;
+}
+
+.shell.dark-mode .header-search .search-field:focus-within,
+.shell.dark-mode .header-search.is-open .search-field {
+  background: #111a2e;
+  border-color: #3b4a68;
+}
+
+.shell.dark-mode .header-search input {
+  color: #e2e8f0;
+}
+
+.shell.dark-mode .header-search input::placeholder {
+  color: #a7b3c6;
+}
+
+.shell.dark-mode .search-toggle {
+  color: #e2e8f0;
+}
+
+.shell.dark-mode .search-results {
+  background: #111a2e;
+  border-color: #2e3d63;
+}
+
+.shell.dark-mode .search-results button {
+  color: #e2e8f0;
+}
+
+.shell.dark-mode .search-results button:hover,
+.shell.dark-mode .search-results button:focus-visible {
+  background: #1e2a4a;
+}
+
+/* Header search: reset the global input styles and hide its label visually. */
+.header-search .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.header-search input {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Beat the global input rules inside the header search pill. */
+.header-search .search-field input[type="search"] {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* Keep the brand on one line; drop the second word at narrow widths. */
+.brand span {
+  white-space: nowrap;
+}
+
+
+/* Phone: wide tables scroll inside their panel instead of pushing the whole page sideways. */
+@media (max-width: 700px) {
+  .panel table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Phone and tablet: the sidebar is an overlay opened by the menu button, not a fixed column. */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 260px;
+    z-index: 10;
+    overflow-y: auto;
+    box-shadow: 0 12px 28px #0b1a2e66;
+  }
+
+  .sidebar.collapsed {
+    width: 260px;
+    transform: translateX(-100%);
+    visibility: hidden;
+  }
+
+  main,
+  .sidebar.collapsed ~ main {
+    margin-left: 0;
+  }
+}
+
+/* Phone overlay: undo the 58px icon-rail rules from the 700px block so labels show in full. */
+@media (max-width: 900px) {
+  .sidebar .nav,
+  .sidebar .subnav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 12px;
+    font-size: 14px;
+    text-align: left;
+    justify-content: flex-start;
+  }
+
+  .sidebar .nav-icon {
+    margin: 0;
+  }
+
+  .sidebar hr {
+    display: block;
+  }
+}
+
+/* Top bar: Google Cloud proportions (64px bar, 40px round icon buttons, 24px glyphs, grey hover circle). */
+header {
+  height: 64px;
+}
+
+.header-left .sidebar-toggle,
+.top-right .toolbar-icon,
+.top-right .avatar,
+.search-toggle {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #5f6368;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.header-left .sidebar-toggle:hover,
+.top-right .toolbar-icon:hover,
+.search-toggle:hover {
+  background: #e8eaed;
+  color: #202124;
+}
+
+.top-right .avatar {
+  background: #dbeafe;
+  color: #174ea6;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.top-right .avatar:hover {
+  background: #cfe0fb;
+}
+
+.header-left .sidebar-toggle svg,
+.top-right .toolbar-icon svg,
+.search-toggle svg {
+  width: 24px;
+  height: 24px;
+}
+
+.header-left .sidebar-toggle:focus-visible,
+.top-right .toolbar-icon:focus-visible,
+.top-right .avatar:focus-visible,
+.search-toggle:focus-visible {
+  outline: 2px solid #174ea6;
+  outline-offset: 2px;
+}
+
+.top-right {
+  gap: 4px;
+}
+
+/* Dark mode: same shapes, dark palette. */
+.shell.dark-mode .header-left .sidebar-toggle,
+.shell.dark-mode .top-right .toolbar-icon,
+.shell.dark-mode .top-right .avatar,
+.shell.dark-mode .search-toggle {
+  border: 0;
+  background: transparent;
+  color: #cbd5e1;
+}
+
+.shell.dark-mode .top-right .avatar {
+  background: #1e2a4a;
+  color: #c7d2fe;
+}
+
+.shell.dark-mode .header-left .sidebar-toggle:hover,
+.shell.dark-mode .top-right .toolbar-icon:hover,
+.shell.dark-mode .search-toggle:hover {
+  background: #2a3550;
+  color: #f1f5f9;
+}
+
+/* Phone and tablet: dimmed area behind the open sidebar. */
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    top: 64px;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 9;
+    background: rgb(15 23 42 / 0.45);
+  }
+}
+
+/* The header search icon only shows on phones (its field is used on larger screens). */
+.search-toggle {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .search-toggle {
+    display: grid;
+  }
+}
+
+/* Match the Google Cloud console top bar: 48px tall. Icon buttons stay 40px inside it. */
+header {
+  height: 52px;
+}
+
+.sidebar {
+  top: 48px;
+}
+
+main {
+  padding-top: 72px;
+}
+
+@media (max-width: 900px) {
+  .sidebar-backdrop {
+    top: 48px;
+  }
+
+  main,
+  .sidebar.collapsed ~ main {
+    padding-top: 64px;
+  }
+}
+
+/* Light theme colours: header #F0F5FE, page body #FFFFFF. Dark theme is unchanged. */
+.shell:not(.dark-mode) header {
+  background: #F0F5FE;
+}
+
+.shell:not(.dark-mode),
+.shell:not(.dark-mode) main {
+  background: #FFFFFF;
+}
+
+body:has(.shell:not(.dark-mode)) {
+  background: #FFFFFF;
+}
+
+/* Content panel like the Google Cloud console: white, rounded top-left corner, inside a #F0F5FE frame. Light theme only. */
+.shell:not(.dark-mode),
+body:has(.shell:not(.dark-mode)) {
+  background: #F0F5FE;
+}
+
+.shell:not(.dark-mode) main {
+  background: #FFFFFF;
+  margin-top: 8px;
+  margin-right: 8px;
+  padding-top: 24px;
+  border-radius: 16px 16px 0 0;
+  min-height: calc(100vh - 56px);
+}
+
+
+/* The fixed 48px header sits above the content panel; start the panel below it with an 8px gap. */
+
+.shell:not(.dark-mode) main {
+
+  margin-top: 56px;
+
+}
+
+
+/* Dark theme: same top bar and rounded content panel as light, in dark colours. */
+.shell.dark-mode,
+body:has(.shell.dark-mode) {
+  background: #0b1120;
+}
+
+.shell.dark-mode header {
+  background: #111a2e;
+  border-bottom-color: #243047;
+}
+
+.shell.dark-mode main {
+  background: #0f1729;
+  margin-top: 56px;
+  margin-right: 8px;
+  padding-top: 24px;
+  border-radius: 16px 0 0 0;
+  min-height: calc(100vh - 56px);
+}
+
+/* Collapsed rail: icons only, like the Google Cloud console. Labels stay readable to screen readers and show as tooltips. */
+.sidebar.collapsed {
+  width: 56px;
+  padding: 8px 4px;
+}
+
+.sidebar.collapsed ~ main {
+  margin-left: 56px;
+}
+
+.sidebar.collapsed .nav {
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  margin: 0 auto;
+  padding: 0;
+  flex-direction: row;
+  justify-content: center;
+  gap: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sidebar.collapsed .nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sidebar.collapsed .nav-icon {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+  margin: 0;
+}
+
+/* The page scrolls inside the content panel, not the whole window (as in the Google Cloud console). */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+.shell {
+  height: 100vh;
+  overflow: hidden;
+}
+
+main {
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+}
+
+/* Phone and tablet: the drawer overlays the page, so the content never gets a left offset. */
+@media (max-width: 900px) {
+  main,
+  .sidebar.collapsed ~ main {
+    margin-left: 0;
+  }
+}
+
+/* Content panel fills the width to the right edge, like the Google Cloud console (no 1520px cap). */
+main {
+  max-width: none;
+}
+
+/* Side menu: a slim scrollbar that appears only when the list overflows, like the console. */
+
+/* Top-bar search: stretches across the bar, like the Google Cloud search field. */
+.header-search {
+  flex: 1 1 auto;
+  max-width: none;
+  margin: 0 24px;
+}
+
+/* Light theme side menu: white, Google-style text, light-blue active item. */
+.shell:not(.dark-mode) .sidebar {
+  background-color: #FFFFFF;
+  background-image: none;
+  border-right: 1px solid #e3e6eb;
+  color: #3c4043;
+  box-shadow: none;
+}
+
+.shell:not(.dark-mode) .sidebar .nav,
+.shell:not(.dark-mode) .sidebar .subnav {
+  color: #3c4043;
+}
+
+.shell:not(.dark-mode) .sidebar .nav:hover,
+.shell:not(.dark-mode) .sidebar .subnav:hover {
+  background: #f1f3f4;
+  color: #202124;
+}
+
+.shell:not(.dark-mode) .sidebar .nav.active,
+.shell:not(.dark-mode) .sidebar .subnav.active,
+.shell:not(.dark-mode) .sidebar .create-nav.active {
+  background: #e8f0fe;
+  color: #0b57d0;
+  box-shadow: none;
+}
+
+.shell:not(.dark-mode) .sidebar .nav-icon,
+.shell:not(.dark-mode) .sidebar .create-nav .nav-icon {
+  color: #5f6368;
+}
+
+.shell:not(.dark-mode) .sidebar .nav.active .nav-icon,
+.shell:not(.dark-mode) .sidebar .create-nav.active .nav-icon {
+  color: #0b57d0;
+}
+
+.shell:not(.dark-mode) .sidebar hr {
+  border-top-color: #e3e6eb;
+}
+
+.shell:not(.dark-mode) .sidebar .nav-section,
+.shell:not(.dark-mode) .sidebar-bottom {
+  color: #5f6368;
+}
+
+/* Scrollbars: no up/down arrow buttons. */
+main::-webkit-scrollbar-button,
+.sidebar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Side menu background: #F0F5FE (light theme). */
+.shell:not(.dark-mode) .sidebar {
+  background-color: #F0F5FE;
+}
+
+/* Scrollbars (Chrome/Edge): slim thumb, no up/down arrow buttons. */
+main::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+main::-webkit-scrollbar-button,
+.sidebar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+main::-webkit-scrollbar-thumb,
+.sidebar::-webkit-scrollbar-thumb {
+  background: #c4c9d1;
+  border-radius: 8px;
+}
+
+main::-webkit-scrollbar-track,
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.shell.dark-mode .sidebar::-webkit-scrollbar-thumb {
+  background: #3b4a68;
+}
+
+/* Top-bar search: colours and size of the Google Cloud console search field (light theme). */
+.shell:not(.dark-mode) .header-search .search-field {
+  height: 36px;
+  background: #DDE3EA;
+  border: 1px solid #B7C3E0;
+  border-radius: 12px;
+  color: #1B2E5D;
+  box-shadow: none;
+}
+
+.shell:not(.dark-mode) .header-search .search-field:focus-within {
+  background: #FFFFFF;
+  border-color: #1B2E5D;
+  box-shadow: none;
+}
+
+.shell:not(.dark-mode) .header-search .search-field > svg {
+  color: #1B2E5D;
+}
+
+.shell:not(.dark-mode) .header-search input[type="search"] {
+  color: #1B2E5D;
+}
+
+.shell:not(.dark-mode) .header-search input::placeholder {
+  color: #46557A;
+  opacity: 1;
+}
+
+/* Collapsed rail: show every menu item (not only the first group). */
+.sidebar.collapsed hr:nth-of-type(2) ~ .nav {
+  display: flex;
+}
+
+/* Collapsed rail: wide enough for the icon buttons plus the scrollbar, and never scrolls sideways. */
+.sidebar.collapsed {
+  width: 64px;
+  padding: 8px 8px;
+  overflow-x: hidden;
+}
+
+.sidebar.collapsed ~ main {
+  margin-left: 64px;
+}
+
+.sidebar.collapsed .nav {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  margin: 0 auto;
+}
+
+.sidebar.collapsed {
+  padding: 8px 4px;
+}
+
+/* Lucide icons inside text: align with the text baseline and keep the theme colours. */
+.field-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.field-error svg {
+  flex: none;
+}
+.openapi-success strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.drop strong svg {
+  color: inherit;
+}
+.acknowledgement-icon svg {
+  display: block;
+}
+
+/* Top bar: no bottom border line (as in the Google Cloud console). */
+header {
+  border-bottom: 0;
+}
+
+/* Hamburger and side-menu icons share one vertical centre line (x = 32px), like the console. */
+header {
+  padding-left: 0;
+}
+
+.header-left .sidebar-toggle {
+  margin-left: 12px;
+}
+
+/* Icon sizes like the console: rail icons 20px, header icons 24px. */
+.nav-icon,
+.sidebar.collapsed .nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-basis: 20px;
+}
+
+.header-search .search-field > svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Collapsed rail: scrollbar hidden but the list still scrolls (wheel, touch, keyboard). */
+.sidebar.collapsed {
+  scrollbar-width: none;
+}
+
+.sidebar.collapsed::-webkit-scrollbar {
+  display: none;
+  width: 0;
+}
+
+/* Side-menu icons: 20px in both expanded and collapsed states (overrides the older 17px rule). */
+.sidebar .nav > .nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-basis: 20px;
+}
+
+/* Gap between the side menu and the content panel, so its rounded top-left corner shows (as in the console). */
+main {
+  margin-left: 243px;
+}
+
+.sidebar.collapsed ~ main {
+  margin-left: 72px;
+}
+
+@media (max-width: 900px) {
+  main,
+  .sidebar.collapsed ~ main {
+    margin-left: 8px;
+  }
+}
+
+/* No vertical line at the edge of the side menu (expanded or minimised, both themes). */
+.sidebar,
+.sidebar.collapsed,
+.shell:not(.dark-mode) .sidebar,
+.shell.dark-mode .sidebar {
+  border-right: 0;
+}
+
+/* Page header row: action and org chip sit together on the right. */
+.heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.heading-actions .primary {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Tables: sticky header, sortable column buttons, row hover (light and dark). */
+.panel table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.panel table tbody tr:hover td {
+  background: #f5f8fd;
+}
+
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.sort-button svg {
+  opacity: 0.6;
+}
+
+.sort-button:hover svg,
+.sort-button:focus-visible svg {
+  opacity: 1;
+}
+
+.shell.dark-mode .panel table tbody tr:hover td {
+  background: #1a2540;
+}
+
+/* Command palette (Ctrl/Cmd+K). */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 16px 16px;
+  background: rgb(15 23 42 / 0.4);
+}
+
+.palette {
+  width: min(600px, 100%);
+  overflow: hidden;
+  border: 1px solid #e3e6eb;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #202124;
+  box-shadow: 0 24px 48px rgb(15 23 42 / 0.25);
+}
+
+.palette-input {
+  width: 100%;
+  height: 52px;
+  padding: 0 18px;
+  border: 0;
+  border-bottom: 1px solid #e3e6eb;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.palette-list {
+  max-height: 340px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.palette-list button {
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette-list button.is-active {
+  background: #e8f0fe;
+  color: #0b57d0;
+}
+
+.palette-empty {
+  margin: 0;
+  padding: 16px 18px;
+  color: #5f6368;
+  font-size: 14px;
+}
+
+.palette-footer {
+  display: flex;
+  gap: 18px;
+  padding: 10px 18px;
+  border-top: 1px solid #e3e6eb;
+  color: #5f6368;
+  font-size: 12px;
+}
+
+.shell.dark-mode .palette {
+  background: #111a2e;
+  border-color: #2e3d63;
+  color: #e2e8f0;
+}
+
+.shell.dark-mode .palette-input,
+.shell.dark-mode .palette-footer {
+  border-color: #2e3d63;
+}
+
+.shell.dark-mode .palette-list button.is-active {
+  background: #1e2a4a;
+  color: #c7d2fe;
+}
+
+.shell.dark-mode .palette-empty,
+.shell.dark-mode .palette-footer {
+  color: #a7b3c6;
+}
+
+/* Loading placeholders (skeletons) and table empty states. */
+.skeleton {
+  display: inline-block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e9edf3 25%, #f5f7fa 37%, #e9edf3 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+.skeleton-num {
+  width: 52px;
+  height: 26px;
+  vertical-align: middle;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.shell.dark-mode .skeleton {
+  background: linear-gradient(90deg, #1a2540 25%, #243047 37%, #1a2540 63%);
+  background-size: 400% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+.table-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 16px;
+  color: #5f6368;
+  text-align: center;
+}
+
+.table-empty svg {
+  color: #174ea6;
+  margin-bottom: 4px;
+}
+
+.table-empty strong {
+  color: #202124;
+  font-size: 15px;
+}
+
+.table-empty span {
+  font-size: 13px;
+}
+
+.table-empty .primary {
+  margin-top: 10px;
+}
+
+.shell.dark-mode .table-empty {
+  color: #a7b3c6;
+}
+
+.shell.dark-mode .table-empty svg {
+  color: #c7d2fe;
+}
+
+.shell.dark-mode .table-empty strong {
+  color: #e2e8f0;
+}
+
+/* Account menu: organisation block and notes (light and dark). */
+.profile-section-label {
+  padding: 10px 16px 4px;
+  color: #5f6368;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.profile-org {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 12px;
+}
+
+.profile-org strong,
+.profile-org small {
+  display: block;
+}
+
+.profile-org strong {
+  font-size: 13px;
+}
+
+.profile-org small {
+  margin-top: 2px;
+  color: #5f6368;
+  font-size: 12px;
+}
+
+.profile-org svg.is-connected {
+  color: #137333;
+}
+
+.profile-org svg.is-offline {
+  color: #b3261e;
+}
+
+.profile-note {
+  margin: 0;
+  padding: 10px 16px 14px;
+  border-top: 1px solid #e3e6eb;
+  color: #5f6368;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.shell.dark-mode .profile-section-label,
+.shell.dark-mode .profile-org small,
+.shell.dark-mode .profile-note {
+  color: #a7b3c6;
+}
+
+.shell.dark-mode .profile-note {
+  border-top-color: #2e3d63;
+}
+
+.shell.dark-mode .profile-org svg.is-connected {
+  color: #4ade80;
+}
+
+
+/* Motion: short, subtle transitions. Reduced-motion users get no animation (see the block at the end). */
+.sidebar {
+  transition: transform 0.22s ease, width 0.2s ease, visibility 0.22s;
+}
+
+main {
+  transition: margin-left 0.2s ease;
+}
+
+.nav,
+.sidebar .nav {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+button.primary,
+button.secondary,
+.edit-button,
+.toolbar-icon,
+.avatar,
+.search-toggle,
+.sidebar-toggle,
+.text-button {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+button.primary:active:not(:disabled),
+button.secondary:active:not(:disabled),
+.toolbar-icon:active,
+.avatar:active,
+.sidebar-toggle:active {
+  transform: scale(0.97);
+}
+
+.top-menu,
+.search-results,
+.palette {
+  animation: menu-in 0.16s ease-out;
+}
+
+.palette-backdrop {
+  animation: fade-in 0.16s ease-out;
+}
+
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Drawer open/close is a slide on phones; the open state is the default sidebar with no collapsed class. */
+@media (max-width: 900px) {
+  .sidebar {
+    transition: transform 0.22s ease, visibility 0.22s;
+  }
+}
+
+/* Reduced motion: no animation or transition anywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Phone: the closed drawer is 260px wide so it slides fully off screen (overrides the 64px rail width). */
+@media (max-width: 900px) {
+  .sidebar.collapsed {
+    width: 260px;
+  }
+}
+
