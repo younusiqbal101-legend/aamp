@@ -73,20 +73,11 @@ const steps = [
 
 const unsavedChangesMessage = "Save your changes before continuing.";
 
-function isSmallScreen() {
-  return window.matchMedia("(max-width: 900px)").matches;
-}
-
 export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [step, setStep] = useState(0);
-  // On small screens the sidebar starts hidden and opens as an overlay.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(isSmallScreen);
-  // Theme: remembered choice first, otherwise follow the OS preference.
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = window.localStorage.getItem("portal-theme");
-    return saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const [openTopMenu, setOpenTopMenu] = useState<"notifications" | "profile" | null>(null);
   const topMenuRef = useRef<HTMLDivElement>(null);
   const methodsDropdownRef = useRef<HTMLLabelElement>(null);
@@ -101,10 +92,6 @@ export default function App() {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     }
   }, [page, step]);
-
-  useEffect(() => {
-    window.localStorage.setItem("portal-theme", darkMode ? "dark" : "light");
-  }, [darkMode]);
 
   useEffect(() => {
     if (!openTopMenu) return;
@@ -421,9 +408,8 @@ export default function App() {
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        aria-invalid={Boolean(error)}
       />
-      {error && <small className="field-error">{error}</small>}
+      {error && <small className="field-error">● {error}</small>}
     </label>
   );
 
@@ -445,7 +431,7 @@ export default function App() {
         disabled={!isEditingDeveloper}
         aria-invalid={Boolean(error)}
       />
-      {error && <small className="field-error">{error}</small>}
+      {error && <small className="field-error">● {error}</small>}
     </label>
   );
 
@@ -463,7 +449,6 @@ export default function App() {
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        aria-invalid={Boolean(error)}
       >
         <option value="" disabled>{`Select ${label.replace(" *", "")}`}</option>
         {options.length === 0 && <option value="" disabled>No live resources available</option>}
@@ -473,7 +458,7 @@ export default function App() {
           </option>
         ))}
       </select>
-      {error && <small className="field-error">{error}</small>}
+      {error && <small className="field-error">● {error}</small>}
     </label>
   );
 
@@ -527,16 +512,10 @@ export default function App() {
     </section>
   );
 
-  // On small screens, picking a destination closes the overlay sidebar.
-  const closeSidebarOnSmallScreen = () => {
-    if (isSmallScreen()) setSidebarCollapsed(true);
-  };
-
   const goCreate = () => {
     setPage("create");
     setStep(0);
     setNotice("");
-    closeSidebarOnSmallScreen();
   };
 
   const next = () => {
@@ -714,11 +693,7 @@ export default function App() {
   const nav = (label: string, destination: Page, icon: SidebarIconName) => (
     <button
       className={`nav ${page === destination ? "active" : ""}`}
-      aria-current={page === destination ? "page" : undefined}
-      onClick={() => {
-        setPage(destination);
-        closeSidebarOnSmallScreen();
-      }}
+      onClick={() => setPage(destination)}
     >
       <SidebarIcon name={icon} />
       {label}
@@ -1397,13 +1372,10 @@ export default function App() {
           "Onboard a new API by uploading an OpenAPI YAML file and configuring Apigee resources."
         )}
 
-        <nav className="steps" aria-label="Onboarding progress">
+        <div className="steps">
           {steps.map((stepName, index) => (
             <button
               key={stepName}
-              type="button"
-              aria-current={index === step ? "step" : undefined}
-              aria-label={`Step ${index + 1} of ${steps.length}: ${stepName}${index < step ? " (completed)" : ""}`}
               className={
                 index === step
                   ? "current"
@@ -1418,21 +1390,13 @@ export default function App() {
                 }
               }}
             >
-              <b aria-hidden="true">{index < step ? "✓" : index + 1}</b>
+              <b>{index < step ? "✓" : index + 1}</b>
               <span>{stepName}</span>
             </button>
           ))}
-        </nav>
+        </div>
 
-        {notice && (
-          <div
-            role="status"
-            aria-live="polite"
-            className={`notice ${notice === unsavedChangesMessage ? "notice-error" : ""}`}
-          >
-            {notice}
-          </div>
-        )}
+        {notice && <div className={`notice ${notice === unsavedChangesMessage ? "notice-error" : ""}`}>{notice}</div>}
 
         {/* STEP 1: YAML */}
         {step === 0 && (
@@ -2202,9 +2166,6 @@ paths: {}`}
 
   return (
     <div className={`shell ${darkMode ? "dark-mode" : ""}`}>
-      <a className="skip-link" href="#main-content">
-        Skip to main content
-      </a>
       <header>
         <div className="header-left">
           <button
@@ -2295,17 +2256,23 @@ paths: {}`}
             </section>
           )}
         </div>
+        <div className="legacy-header-status">
+          <span className="connection">
+            <i />{" "}
+            {backendInfo?.mode === "apigee"
+              ? `Apigee ${backendInfo.org}${backendInfo.dryRun ? " · dry run" : ""}`
+              : backendOnline === false
+                ? "Backend offline"
+                : "Connecting to backend"}
+          </span>
+        </div>
       </header>
 
-      <aside
-        className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}
-        aria-label="Main navigation"
-      >
+      <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
         {nav("Dashboard", "home", "dashboard")}
 
         <button
           className={`nav create-nav ${page === "create" ? "active" : ""}`}
-          aria-current={page === "create" ? "page" : undefined}
           onClick={goCreate}
         >
           <SidebarIcon name="create" /> Create API
@@ -2343,7 +2310,7 @@ paths: {}`}
 
       </aside>
 
-      <main id="main-content" tabIndex={-1}>
+      <main>
         {page === "create" ? (
           renderWizard()
         ) : page === "provisioning" ? (
