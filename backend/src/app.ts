@@ -198,22 +198,23 @@ function view(request: ProvisioningRequest, withDetails: boolean) {
   };
 }
 
-app.get("/api/requests", (_req, res) => {
-  res.json({ success: true, data: store.list().map((r) => view(r, false)) });
+app.get("/api/requests", async (_req, res) => {
+  const requests = await store.list();
+  res.json({ success: true, data: requests.map((r) => view(r, false)) });
 });
 
-app.get("/api/requests/:id", (req, res) => {
-  const request = store.get(req.params.id);
+app.get("/api/requests/:id", async (req, res) => {
+  const request = await store.get(req.params.id);
   if (!request) throw new HttpError(404, "Request not found.");
   res.json({ success: true, data: view(request, true) });
 });
 
-app.post("/api/requests", (req, res) => {
+app.post("/api/requests", async (req, res) => {
   const body = obj(req.body);
   const payload = toPayload(body);
   const now = new Date().toISOString();
   const request: ProvisioningRequest = {
-    id: nextRequestId(),
+    id: await nextRequestId(),
     apiName: payload.apiName,
     environment: payload.environment,
     status: "DRAFT",
@@ -224,18 +225,18 @@ app.post("/api/requests", (req, res) => {
     logs: [],
     result: {},
   };
-  store.save(request);
-  if (body.submit === true) startProvisioning(request);
+  await store.save(request);
+  if (body.submit === true) await startProvisioning(request);
   res.status(201).json({ success: true, data: view(request, true) });
 });
 
-app.post("/api/requests/:id/submit", (req, res) => {
-  const request = store.get(req.params.id);
+app.post("/api/requests/:id/submit", async (req, res) => {
+  const request = await store.get(req.params.id);
   if (!request) throw new HttpError(404, "Request not found.");
   if (request.status !== "DRAFT") {
     throw new HttpError(409, `Request is already ${request.status}.`);
   }
-  startProvisioning(request);
+  await startProvisioning(request);
   res.json({ success: true, data: view(request, true) });
 });
 
