@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { parseOpenApiSpec } from "./openApiParser";
 import { newOperations, provider, providerInfo, startProvisioning } from "./provisioning";
 import { nextRequestId, store } from "./store";
+import { createPublished, listPublished } from "./publishedCatalog";
 import {
   isValidEnvironmentName,
   type Environment,
@@ -53,6 +54,18 @@ app.get("/api/environments", async (_req, res) => {
   }
 });
 
+app.get("/api/developer-apps", async (req, res) => {
+  const email = str(req.query.email).trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Select a valid developer email.");
+  try { res.json({ success: true, data: await provider.listDeveloperApps(email) }); }
+  catch (error) { throw new HttpError(502, `Could not load developer apps: ${error instanceof Error ? error.message : "unknown error"}`); }
+});
+
+app.get("/api/developer-app-owners", async (_req, res) => {
+  try { res.json({ success: true, data: await provider.listAppsWithOwners() }); }
+  catch (error) { throw new HttpError(502, `Could not load developer apps: ${error instanceof Error ? error.message : "unknown error"}`); }
+});
+
 app.get("/api/resources", async (req, res) => {
   const env = str(req.query.env);
   if (!isValidEnvironmentName(env)) {
@@ -64,6 +77,28 @@ app.get("/api/resources", async (req, res) => {
     const detail = error instanceof Error ? error.message : "unknown error";
     throw new HttpError(502, `Could not load resources: ${detail}`);
   }
+});
+
+app.get("/api/published-apis", async (_req, res) => {
+  res.json({ success: true, data: await listPublished() });
+});
+
+app.post("/api/published-apis", async (req, res) => {
+  const product = str(req.body?.product).trim();
+  const title = str(req.body?.title).trim();
+  const description = str(req.body?.description).trim();
+  const specContent = str(req.body?.specContent);
+  const environment = str(req.body?.environment);
+  if (!product || !title || !specContent || !isValidEnvironmentName(environment)) throw new HttpError(400, "Select a product and enter a title, environment and OpenAPI document.");
+  try { parseOpenApiSpec(specContent); } catch (error) { throw new HttpError(422, error instanceof Error ? error.message : "Invalid OpenAPI document."); }
+  const resources = await provider.listResources(environment);
+  if (!resources.products.includes(product)) throw new HttpError(400, "The selected API product was not found in Apigee.");
+  const entry = { product, title, description, specContent, publishedAt: new Date().toISOString() };
+  try { await createPublished(entry); } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HttpError(409, "This API product is already published.");
+    throw error;
+  }
+  res.status(201).json({ success: true, data: entry });
 });
 
 app.post("/api/specs/validate", (req, res) => {
@@ -135,7 +170,7 @@ function toPayload(body: Record<string, unknown>): RequestPayload {
       lastName: str(developer.lastName),
       email: str(developer.email),
     },
-    developerApp: { mode: str(developerApp.mode, "new"), name: str(developerApp.name) },
+    developerApp: { mode: str(developerApp.mode, "new"), name: str(developerApp.name), displayName: str(developerApp.displayName) },
     target: {
       mode: str(target.mode, "existing"),
       name: str(target.name),
@@ -159,6 +194,7 @@ function view(request: ProvisioningRequest, withDetails: boolean) {
     status: rest.status,
     createdAt: rest.createdAt,
     updatedAt: rest.updatedAt,
+    dryRun: rest.result.dryRun ?? rest.provider?.dryRun ?? null,
   };
 }
 
@@ -184,7 +220,7 @@ app.post("/api/requests", (req, res) => {
     createdAt: now,
     updatedAt: now,
     payload,
-    operations: newOperations(),
+    operations: newOperations(payload),
     logs: [],
     result: {},
   };

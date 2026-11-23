@@ -31,6 +31,8 @@ export interface ProvisioningProvider {
   execute(step: number, request: ProvisioningRequest): Promise<void>;
   /** Live catalogue for the UI dropdowns. */
   listResources(env: string): Promise<ResourceCatalog>;
+  listDeveloperApps(email: string): Promise<string[]>;
+  listAppsWithOwners(): Promise<Array<{ name: string; email: string }>>;
   /** Environment names that exist in the target Apigee org. */
   listEnvironments(): Promise<string[]>;
   /** Free any per-request state once the pipeline has ended. */
@@ -54,13 +56,19 @@ export function providerInfo() {
   };
 }
 
-export function newOperations(): ProvisioningOperation[] {
-  return PIPELINE.map((op) => ({ ...op, status: "PENDING" as const }));
+export function newOperations(payload?: ProvisioningRequest["payload"]): ProvisioningOperation[] {
+  return PIPELINE.map((op) => {
+    if (payload && op.id === 3) return { ...op, name: payload.product.mode === "existing" ? "Associate Existing API Product" : "Create API Product", description: payload.product.mode === "existing" ? "Associate the proxy with the selected API product" : "Create the API product", status: "PENDING" as const };
+    if (payload && op.id === 4) return { ...op, name: payload.developer.mode === "existing" ? "Verify Existing Developer" : "Create Developer", description: payload.developer.mode === "existing" ? "Verify the selected developer" : "Create the developer", status: "PENDING" as const };
+    if (payload && op.id === 5) return { ...op, name: payload.developerApp.mode === "existing" ? "Associate Existing Developer App" : "Create Developer App", description: payload.developerApp.mode === "existing" ? "Associate the API product with the selected app" : "Create the app and associate the API product", status: "PENDING" as const };
+    if (payload && op.id === 6) return { ...op, name: payload.target.mode === "existing" ? "Verify Existing Target Server" : "Create Target Server", description: payload.target.mode === "existing" ? "Verify the selected target server" : "Create the target server", status: "PENDING" as const };
+    return { ...op, status: "PENDING" as const };
+  });
 }
 
 export function startProvisioning(request: ProvisioningRequest): void {
   request.status = "PROVISIONING";
-  request.operations = newOperations();
+  request.operations = newOperations(request.payload);
   request.result = {};
   request.logs = [];
   logLine(request, "Provisioning request accepted.");

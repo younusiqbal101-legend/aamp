@@ -64,6 +64,37 @@ export class ApigeeProvider implements ProvisioningProvider {
     return names(data, "name");
   }
 
+  async listDeveloperApps(email: string): Promise<string[]> {
+    const { data } = await this.client.call("GET", `${this.orgPath()}/developers/${enc(email)}/apps`, { query: { expand: "true" } });
+    return names(Array.isArray(data) ? data : data.app ?? data.apps, "name");
+  }
+
+  async listAppsWithOwners(): Promise<Array<{ name: string; email: string }>> {
+    const { data } = await this.client.call("GET", `${this.orgPath()}/developers`, { query: { expand: "true" } });
+    const emails = names(Array.isArray(data) ? data : data.developer, "email");
+    const lists = await Promise.all(emails.map(async (email) =>
+      (await this.listDeveloperApps(email)).map((name) => ({ name, email }))
+    ));
+    return lists.flat().sort((a, b) => a.name.localeCompare(b.name) || a.email.localeCompare(b.email));
+  }
+
+  async listDeployedBasePaths(env: string): Promise<string[]> {
+    const { data } = await this.client.call("GET", `${this.envPath(env)}/deployments`);
+    const deployments = data.deployments ?? [];
+    if (!Array.isArray(deployments)) throw new Error("Invalid deployment list returned by Apigee.");
+    const paths = await Promise.all(deployments.map(async (deployment: any) => {
+      const proxy = deployment.apiProxy;
+      const revision = deployment.revision;
+      if (typeof proxy !== "string" || !revision) throw new Error("A deployed proxy is missing its name or revision; cannot validate base paths.");
+      const { data: metadata } = await this.client.call("GET", `${this.orgPath()}/apis/${enc(proxy)}/revisions/${enc(String(revision))}`);
+      if (!Array.isArray(metadata.basepaths) || !metadata.basepaths.length || metadata.basepaths.some((value: unknown) => typeof value !== "string")) {
+        throw new Error(`Cannot determine base paths for deployed proxy "${proxy}" revision ${revision}.`);
+      }
+      return metadata.basepaths as string[];
+    }));
+    return [...new Set(paths.flat())].sort();
+  }
+
   async listResources(env: string): Promise<ResourceCatalog> {
     const org = this.orgPath();
     const [proxies, products, developers, apps, targets, flows] = await Promise.all([
@@ -75,16 +106,7 @@ export class ApigeeProvider implements ProvisioningProvider {
       this.client.call("GET", `${org}/sharedflows`),
     ]);
     const proxyNames = names(proxies.data.proxies ?? proxies.data, "name");
-    const deployments = await this.client.call("GET", `${this.envPath(env)}/deployments`, { allow: [404] });
-    const deployed = Array.isArray((deployments.data as any)?.deployments) ? (deployments.data as any).deployments : [];
-    const basePaths = (await Promise.all(deployed.map(async (deployment: any) => {
-      const proxy = deployment.apiProxy ?? deployment.aPIProxy ?? deployment.proxy;
-      const revision = deployment.revision ?? deployment.revisionNumber;
-      if (!proxy || !revision) return "";
-      const endpoint = await this.client.call("GET", `${this.orgPath()}/apis/${enc(proxy)}/revisions/${enc(String(revision))}/proxies/default`, { allow: [404] });
-      const xml = typeof endpoint.data === "string" ? endpoint.data : "";
-      return xml.match(/<BasePath>([^<]+)<\/BasePath>/)?.[1] ?? "";
-    }))).filter(Boolean).sort();
+    const basePaths = await this.listDeployedBasePaths(env);
     return {
       basePaths,
       proxies: proxyNames,
@@ -153,6 +175,22 @@ export class ApigeeProvider implements ProvisioningProvider {
     if (proxy.status !== 404) throw new Error(`API proxy "${p.apiName}" already exists.`);
     if (p.product.mode === "new" && product.status !== 404) throw new Error(`API product "${p.product.name}" already exists.`);
     if (p.target.mode === "new" && target.status !== 404) throw new Error(`Target server "${p.target.name}" already exists in "${p.environment}".`);
+    const basePaths = await this.listDeployedBasePaths(p.environment);
+    const normalizePath = (value: string) => value.trim().replace(/\/+$/, "") || "/";
+    if (basePaths.some((existing) => normalizePath(existing) === normalizePath(p.basePath))) throw new Error(`Base path "${p.basePath}" already exists in "${p.environment}".`);
+    if (p.developer.mode === "new") {
+      const developer = await this.client.call("GET", `${this.orgPath()}/developers/${enc(p.developer.email)}`, { allow: [404] });
+      if (developer.status !== 404) throw new Error(`Developer "${p.developer.email}" already exists.`);
+    }
+    if (p.developerApp.mode === "new" && p.developer.mode === "existing") {
+      const app = await this.client.call("GET", `${this.orgPath()}/developers/${enc(p.developer.email)}/apps/${enc(p.developerApp.name)}`, { allow: [404] });
+      if (app.status !== 404) throw new Error(`Developer app "${p.developerApp.name}" already exists for "${p.developer.email}".`);
+    }
+    if (p.developerApp.mode === "existing") {
+      if (p.developer.mode !== "existing") throw new Error("An existing app requires an existing developer who owns it.");
+      const app = await this.client.call("GET", `${this.orgPath()}/developers/${enc(p.developer.email)}/apps/${enc(p.developerApp.name)}`, { allow: [404] });
+      if (app.status === 404) throw new Error(`Developer app "${p.developerApp.name}" does not belong to "${p.developer.email}".`);
+    }
     logLine(req, `Apigee org "${this.cfg.org}" and environment "${p.environment}" are reachable.`);
   }
 
@@ -210,15 +248,29 @@ export class ApigeeProvider implements ProvisioningProvider {
       return logLine(req, `Created API product "${product.name}".`);
     }
 
-    // Product exists: make sure it includes this proxy and environment.
+    // Keep operation-group products in their existing representation.
     const body = existing.data;
-    const proxies: string[] = body.proxies ?? [];
-    const environments: string[] = body.environments ?? [];
-    if (proxies.includes(api) && environments.includes(env)) {
-      return logLine(req, `API product "${product.name}" already includes "${api}" in "${env}".`);
+    const resourcePath = (product.resourcePath || "/**").trim();
+    const methods = (product.methods || "").split(",").map((method) => method.trim().toUpperCase()).filter(Boolean);
+    if (!resourcePath.startsWith("/")) throw new Error("Product operation path must begin with /.");
+    const environments: string[] = Array.isArray(body.environments) ? [...body.environments] : [];
+    if (environments.length && !environments.includes(env)) environments.push(env);
+    if (body.operationGroup) {
+      const group = body.operationGroup;
+      if (group.operationConfigType && group.operationConfigType !== "proxy") throw new Error("Cannot add an API proxy to a remote-service operation group.");
+      const configs = Array.isArray(group.operationConfigs) ? [...group.operationConfigs] : [];
+      const alreadyIncluded = configs.some((config: any) => config.apiSource === api && (config.operations ?? []).some((operation: any) => operation.resource === resourcePath && JSON.stringify([...(operation.methods ?? [])].sort()) === JSON.stringify([...methods].sort())));
+      if (!alreadyIncluded) configs.push({ apiSource: api, operations: [{ resource: resourcePath, ...(methods.length ? { methods } : {}) }] });
+      const updated = { ...body, environments, operationGroup: { ...group, operationConfigs: configs } };
+      delete updated.proxies;
+      delete updated.apiResources;
+      await this.client.call("PUT", base, { json: updated });
+      return logLine(req, `Associated "${api}" path "${resourcePath}" with existing API product "${product.name}".`);
     }
+    const proxies: string[] = Array.isArray(body.proxies) ? [...body.proxies] : [];
+    if (methods.length || resourcePath !== "/**") throw new Error("This API product uses legacy proxy settings, which cannot represent the selected path and methods separately. Update the product to use operation groups in Apigee first.");
+    if (!proxies.length) throw new Error("This legacy product allows all proxies; adding a proxy list would restrict existing access. Configure an operation group in Apigee first.");
     if (!proxies.includes(api)) proxies.push(api);
-    if (!environments.includes(env)) environments.push(env);
     await this.client.call("PUT", base, { json: { ...body, proxies, environments } });
     logLine(req, `Added "${api}" (${env}) to existing API product "${product.name}".`);
   }
@@ -259,7 +311,7 @@ export class ApigeeProvider implements ProvisioningProvider {
     if (found.status === 404) {
       if (app.mode === "existing") throw new Error(`Developer app "${app.name}" does not exist for ${developer.email}.`);
       const created = await this.client.call("POST", `${this.orgPath()}/developers/${enc(developer.email)}/apps`, {
-        json: { name: app.name, apiProducts: [product.name] },
+        json: { name: app.name, apiProducts: [product.name], ...(app.displayName ? { attributes: [{ name: "DisplayName", value: app.displayName }] } : {}) },
       });
       req.result.consumerKey = created.data.credentials?.[0]?.consumerKey;
       return logLine(req, `Created app "${app.name}" with product "${product.name}" and generated credentials.`);

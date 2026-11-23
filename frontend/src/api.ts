@@ -2,6 +2,7 @@ import type { ParsedOpenApiSpec } from "./openApiParser";
 
 export type OperationStatus = "PENDING" | "IN_PROGRESS" | "SUCCESS" | "FAILED";
 export type RequestStatus = "DRAFT" | "PROVISIONING" | "COMPLETED" | "FAILED";
+export type PublishedApi = { product: string; title: string; description: string; specContent: string; publishedAt: string };
 
 export type ProvisioningOperation = {
   id: number;
@@ -17,6 +18,7 @@ export type RequestSummary = {
   status: RequestStatus;
   createdAt: string;
   updatedAt: string;
+  dryRun?: boolean | null;
 };
 
 export type ProvisioningResult = {
@@ -118,9 +120,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  publishedApis: () => request<PublishedApi[]>("/published-apis"),
+  publishApi: (input: { product: string; title: string; description: string; specContent: string; environment: string }) =>
+    request<PublishedApi>("/published-apis", { method: "POST", body: JSON.stringify(input) }),
   // /health returns its fields at the top level (no "data" wrapper).
   health: () => request<BackendHealth>("/health"),
   environments: () => request<string[]>("/environments"),
+  developerApps: (email: string) => request<string[]>(`/developer-apps?email=${encodeURIComponent(email)}`),
+  developerAppsWithOwners: () => request<Array<{ name: string; email: string }>>("/developer-app-owners"),
   resources: (env: string) =>
     request<ResourceCatalog>(`/resources?env=${encodeURIComponent(env)}`),
   validateSpec: (content: string) =>
