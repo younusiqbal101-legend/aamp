@@ -58,7 +58,7 @@ export function newOperations(): ProvisioningOperation[] {
   return PIPELINE.map((op) => ({ ...op, status: "PENDING" as const }));
 }
 
-export function startProvisioning(request: ProvisioningRequest): void {
+export async function startProvisioning(request: ProvisioningRequest): Promise<void> {
   request.status = "PROVISIONING";
   request.operations = newOperations();
   request.result = {};
@@ -70,7 +70,7 @@ export function startProvisioning(request: ProvisioningRequest): void {
     request,
     `Starting pipeline (Apigee provider, org "${info.org}", ${info.dryRun ? "DRY RUN" : "LIVE"}).`
   );
-  store.save(request);
+  await store.save(request);
   void run(request);
 }
 
@@ -78,26 +78,26 @@ async function run(request: ProvisioningRequest): Promise<void> {
   try {
     for (const op of request.operations) {
       op.status = "IN_PROGRESS";
-      store.save(request);
+      await store.save(request);
 
       try {
         await provider.execute(op.id, request);
         op.status = "SUCCESS";
         logLine(request, `SUCCESS: ${op.name}`);
-        store.save(request);
+        await store.save(request);
       } catch (error) {
         op.status = "FAILED";
         request.status = "FAILED";
         const detail = error instanceof Error ? error.message : "Unknown error";
         logLine(request, `FAILED: ${op.name} — ${detail}`);
-        store.save(request);
+        await store.save(request);
         return;
       }
     }
 
     request.status = "COMPLETED";
     logLine(request, "Pipeline completed.");
-    store.save(request);
+    await store.save(request);
   } finally {
     provider.onFinish?.(request);
   }

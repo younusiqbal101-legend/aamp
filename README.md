@@ -103,6 +103,6 @@ If the UI cannot connect to the backend:
   rather than deploying an unprotected proxy.
 - Shared flows must already exist and be deployed in the environment; uploading a *new* shared-flow bundle is not implemented.
 - Multiple CORS origins are supported (one policy per origin); a single `*` is fine too.
-- The backend API itself has **no authentication yet** and the request store is **in memory** (lost on restart).
-  Do not expose it beyond your machine/network until both are addressed.
+- The backend API itself has **no authentication yet**. Do not expose it beyond your machine/network until that is addressed.
+- Requests are stored in **PostgreSQL** (table `provisioning_requests`, created automatically at startup). Set `DATABASE_URL` in `backend/.env`; the backend will not start without it.
 - Names must follow Apigee rules (letters, digits, `.`, `_`, `-`).

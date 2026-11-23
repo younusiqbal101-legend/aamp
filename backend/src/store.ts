@@ -1,26 +1,56 @@
+import { pool, schemaReady } from "./db";
 import type { ProvisioningRequest } from "./types";
 
-// In-memory store. Swap for PostgreSQL later without touching the routes.
-const requests = new Map<string, ProvisioningRequest>();
-let counter = 1047;
+// PostgreSQL-backed store. Each request is saved as one JSONB document;
+// the indexed columns are duplicated out for listing and lookups.
 
-export function nextRequestId(): string {
-  counter += 1;
-  return `REQ-${counter}`;
+export async function nextRequestId(): Promise<string> {
+  await schemaReady;
+  const { rows } = await pool.query<{ n: string }>(
+    "SELECT nextval('provisioning_request_seq') AS n"
+  );
+  return `REQ-${rows[0].n}`;
 }
 
 export const store = {
-  save(request: ProvisioningRequest) {
+  async save(request: ProvisioningRequest): Promise<ProvisioningRequest> {
+    await schemaReady;
     request.updatedAt = new Date().toISOString();
-    requests.set(request.id, request);
+    await pool.query(
+      `INSERT INTO provisioning_requests
+         (id, api_name, environment, status, created_at, updated_at, data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id) DO UPDATE SET
+         status     = EXCLUDED.status,
+         updated_at = EXCLUDED.updated_at,
+         data       = EXCLUDED.data`,
+      [
+        request.id,
+        request.apiName,
+        request.environment,
+        request.status,
+        request.createdAt,
+        request.updatedAt,
+        JSON.stringify(request),
+      ]
+    );
     return request;
   },
-  get(id: string) {
-    return requests.get(id);
-  },
-  list() {
-    return [...requests.values()].sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt)
+
+  async get(id: string): Promise<ProvisioningRequest | undefined> {
+    await schemaReady;
+    const { rows } = await pool.query<{ data: ProvisioningRequest }>(
+      "SELECT data FROM provisioning_requests WHERE id = $1",
+      [id]
     );
+    return rows[0]?.data;
+  },
+
+  async list(): Promise<ProvisioningRequest[]> {
+    await schemaReady;
+    const { rows } = await pool.query<{ data: ProvisioningRequest }>(
+      "SELECT data FROM provisioning_requests ORDER BY created_at DESC"
+    );
+    return rows.map((row) => row.data);
   },
 };
