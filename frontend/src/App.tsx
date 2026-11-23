@@ -37,6 +37,7 @@ import {
   type BackendHealth,
   type RequestSummary,
   type ResourceCatalog,
+  type PublishedApi,
 } from "./api";
 import PolicyBuilder from "./PolicyBuilder";
 import "./App.css";
@@ -126,6 +127,17 @@ function TableEmpty({ title, text, action }: { title: string; text: string; acti
 
 export default function App() {
   const [page, setPage] = useState<Page>("home");
+  const [resourceView, setResourceView] = useState<string | null>(null);
+  const [publishedApis, setPublishedApis] = useState<PublishedApi[]>([]);
+  const [publishedSelection, setPublishedSelection] = useState<PublishedApi | null>(null);
+  const [publishedSpec, setPublishedSpec] = useState<ParsedOpenApiSpec | null>(null);
+  const [publishProduct, setPublishProduct] = useState("");
+  const [publishTitle, setPublishTitle] = useState("");
+  const [publishDescription, setPublishDescription] = useState("");
+  const [publishSpec, setPublishSpec] = useState("");
+  const [publishFile, setPublishFile] = useState("");
+  const [publishError, setPublishError] = useState("");
+  const [publishing, setPublishing] = useState(false);
   const [step, setStep] = useState(0);
   // On phones the sidebar starts hidden and opens as an overlay from the menu button.
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -135,11 +147,17 @@ export default function App() {
   const [openTopMenu, setOpenTopMenu] = useState<"notifications" | "profile" | null>(null);
   const topMenuRef = useRef<HTMLDivElement>(null);
   const methodsDropdownRef = useRef<HTMLLabelElement>(null);
-  const [notice, setNotice] = useState("");
+  const [notice, setNoticeText] = useState("");
+  const [noticeIsError, setNoticeIsError] = useState(false);
+  const setNotice = (message: string, isError = true) => {
+    setNoticeText(message);
+    setNoticeIsError(Boolean(message) && isError);
+  };
   const [catalogQuery, setCatalogQuery] = useState("");
   const [methodsDropdownOpen, setMethodsDropdownOpen] = useState(false);
   const [headerQuery, setHeaderQuery] = useState("");
   const [resourcesLoaded, setResourcesLoaded] = useState(false);
+  const [resourceLoadError, setResourceLoadError] = useState("");
   // Command palette (Ctrl+K / Cmd+K): a centred page search.
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
@@ -220,6 +238,8 @@ export default function App() {
   const [contactEmail, setContactEmail] = useState("");
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [detailsValidationAttempted, setDetailsValidationAttempted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [sectionError, setSectionError] = useState<{ id: string; message: string } | null>(null);
   const [isEditingOperations, setIsEditingOperations] = useState(false);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
   const [isEditingDeveloper, setIsEditingDeveloper] = useState(false);
@@ -284,7 +304,14 @@ export default function App() {
   // Developer App
   const [appMode, setAppMode] = useState("new");
   const [appName, setAppName] = useState("");
+  const [appDisplayName, setAppDisplayName] = useState("");
   const [existingApp, setExistingApp] = useState("");
+  const [developerApps, setDeveloperApps] = useState<string[]>([]);
+  const [developerAppsLoading, setDeveloperAppsLoading] = useState(false);
+  const [developerAppsError, setDeveloperAppsError] = useState("");
+  const [appsWithOwners, setAppsWithOwners] = useState<Array<{ name: string; email: string }>>([]);
+  const [appsWithOwnersLoading, setAppsWithOwnersLoading] = useState(false);
+  const [appsWithOwnersError, setAppsWithOwnersError] = useState("");
 
   // Target configuration
   const [targetMode, setTargetMode] = useState("existing");
@@ -304,6 +331,11 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [validating, setValidating] = useState(false);
   const [requests, setRequests] = useState<RequestSummary[]>([]);
+
+  useEffect(() => {
+    if (page !== "resources" && page !== "publish") return;
+    apiClient.publishedApis().then(setPublishedApis).catch((error: unknown) => setPublishError(error instanceof Error ? error.message : "Unable to load published APIs."));
+  }, [page]);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [backendInfo, setBackendInfo] = useState<BackendHealth | null>(null);
   const [resources, setResources] = useState<ResourceCatalog>({
@@ -324,6 +356,8 @@ export default function App() {
   const proxyOptions = Array.from(new Set([...existingProxies, api].filter(Boolean))).sort();
   const methodOptions = ["GET", "PATCH", "POST", "PUT", "DELETE", "HEAD", "CONNECT", "OPTIONS", "TRACE"];
   const selectedProductMethods = productMethods.split(",").map((method) => method.trim()).filter(Boolean);
+  const hasName = (list: string[], value: string) => Boolean(value.trim()) && list.some((item) => item.trim().toLowerCase() === value.trim().toLowerCase());
+  const duplicatePath = Boolean(basePath.trim()) && resources.basePaths.some((path) => (path.trim().replace(/\/+$/, "") || "/") === (basePath.trim().replace(/\/+$/, "") || "/"));
 
   // Backend health (and which provisioning mode it runs in) on startup.
   useEffect(() => {
@@ -358,25 +392,59 @@ export default function App() {
   useEffect(() => {
     // Wait until the real environment names are known, otherwise we ask Apigee about a "dev" that may not exist.
     if (!environmentsLoaded || !env) return;
+    let cancelled = false;
+    setResourcesLoaded(false);
+    setResourceLoadError("");
     apiClient
       .resources(env)
       .then((catalog) => {
+        if (cancelled) return;
         setResources(catalog);
         setExistingProduct((current) => catalog.products.includes(current) ? current : "");
         setExistingDeveloper((current) => catalog.developers.includes(current) ? current : "");
-        setExistingApp((current) => catalog.apps.includes(current) ? current : "");
         setTarget((current) => catalog.targets.includes(current) ? current : "");
       })
       .catch((error: unknown) => {
+        if (cancelled) return;
+        setResourceLoadError(error instanceof Error ? error.message : "Could not load Apigee resources.");
         setResources({ proxies: [], basePaths: [], targets: [], products: [], developers: [], apps: [], sharedFlows: {} });
         setNotice(error instanceof Error ? error.message : "Could not load Apigee resources.");
       })
-      .finally(() => setResourcesLoaded(true));
+      .finally(() => { if (!cancelled) setResourcesLoaded(true); });
+    return () => { cancelled = true; };
   }, [env, environmentsLoaded]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDeveloperApps([]);
+    setDeveloperAppsError("");
+    if (developerMode !== "existing" || !existingDeveloper) {
+      setDeveloperAppsLoading(false);
+      return;
+    }
+    setDeveloperAppsLoading(true);
+    apiClient.developerApps(existingDeveloper)
+      .then((apps) => { if (!cancelled) setDeveloperApps(apps); })
+      .catch((error: unknown) => { if (!cancelled) setDeveloperAppsError(error instanceof Error ? error.message : "Could not load developer apps."); })
+      .finally(() => { if (!cancelled) setDeveloperAppsLoading(false); });
+    return () => { cancelled = true; };
+  }, [developerMode, existingDeveloper]);
+
+  useEffect(() => {
+    if (appMode !== "existing") return;
+    let cancelled = false;
+    setAppsWithOwnersLoading(true);
+    setAppsWithOwnersError("");
+    apiClient.developerAppsWithOwners()
+      .then((apps) => { if (!cancelled) setAppsWithOwners(apps); })
+      .catch((error: unknown) => { if (!cancelled) { setAppsWithOwners([]); setAppsWithOwnersError(error instanceof Error ? error.message : "Could not load developer apps."); } })
+      .finally(() => { if (!cancelled) setAppsWithOwnersLoading(false); });
+    return () => { cancelled = true; };
+  }, [appMode]);
 
   // Refresh request history whenever the page is opened.
   useEffect(() => {
-    if (page !== "requests" && page !== "approve" && page !== "home") return;
+    if (page !== "requests" && page !== "approve" && page !== "home" && page !== "resources") return;
     apiClient
       .listRequests()
       .then(setRequests)
@@ -438,7 +506,7 @@ export default function App() {
             quotaUnit: productQuotaUnit,
             oauthScopes: productOauthScopes,
           }
-        : { mode: "existing", name: existingProduct },
+        : { mode: "existing", name: existingProduct, apiProxy: api, resourcePath: productResourcePath, methods: productMethods },
     developer:
       developerMode === "new"
         ? {
@@ -451,7 +519,7 @@ export default function App() {
         : { mode: "existing", name: existingDeveloper, email: existingDeveloper },
     developerApp:
       appMode === "new"
-        ? { mode: "new", name: appName }
+        ? { mode: "new", name: appName, displayName: appDisplayName }
         : { mode: "existing", name: existingApp },
     target:
       targetMode === "new"
@@ -557,7 +625,7 @@ export default function App() {
       <div className="heading-actions">
         {action}
         <span className="env">
-          Apigee X · {env.toUpperCase()}
+          Environment · <strong>{env.toUpperCase() || "—"}</strong>
         </span>
       </div>
     </div>
@@ -605,6 +673,14 @@ export default function App() {
   };
 
   const next = () => {
+    setSectionError(null);
+    const showRequiredError = (editorId: string, message: string) => {
+      setSectionError({ id: editorId, message });
+      setNotice("");
+      requestAnimationFrame(() => {
+        document.getElementById(editorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    };
     if (step === 0 && (!valid || !parsedSpec)) {
       setNotice(
         "Upload an OpenAPI document and successfully parse it before continuing."
@@ -617,35 +693,30 @@ export default function App() {
       return;
     }
 
-    if (step === 1 && (!api.trim() || !display.trim() || !basePath.trim() || !version.trim() || !description.trim() || !env)) {
+    if (step === 1 && (!resourcesLoaded || resourceLoadError)) {
+      showRequiredError("api-details-editor", resourceLoadError ? `Cannot verify existing resources: ${resourceLoadError}` : "Wait until existing resources finish loading.");
+      return;
+    }
+
+    if (step === 1 && (!/^[a-z0-9][a-z0-9-]*$/.test(api.trim()) || !display.trim() || !basePath.trim() || !version.trim() || !description.trim() || !env)) {
       setIsEditingDetails(true);
       setDetailsValidationAttempted(true);
-      setNotice("Complete all required API Details fields before continuing.");
-      requestAnimationFrame(() => {
-        document.getElementById("api-details-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      showRequiredError("api-details-editor", "Complete all required API Details fields before continuing.");
       return;
     }
 
     if (step === 1 && existingProxies.some((name) => name.trim().toLowerCase() === api.trim().toLowerCase())) {
       setIsEditingDetails(true);
       setDetailsValidationAttempted(true);
-      setNotice(`A proxy named "${api}" already exists in ${env}. Use a different proxy name.`);
+      showRequiredError("api-details-editor", `A proxy named "${api}" already exists in ${env}. Use a different proxy name.`);
       return;
     }
     if (step === 1 && resources.basePaths.some((path) => path.replace(/\/$/, "") === basePath.trim().replace(/\/$/, ""))) {
       setIsEditingDetails(true);
       setDetailsValidationAttempted(true);
-      setNotice(`The base path "${basePath}" is already deployed in ${env}. Use a different base path.`);
+      showRequiredError("api-details-editor", `The base path "${basePath}" is already deployed in ${env}. Use a different base path.`);
       return;
     }
-
-    const showRequiredError = (editorId: string, message: string) => {
-      setNotice(message);
-      requestAnimationFrame(() => {
-        document.getElementById(editorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    };
 
     if (step === 2) {
       if (productMode === "new" && (!productName.trim() || !productDisplayName.trim() || !productEnvironment || !productAccess || !productApproval || !productProxy || !productResourcePath.trim())) {
@@ -653,23 +724,34 @@ export default function App() {
         showRequiredError("product-editor", "Complete all required API Product fields before continuing.");
         return;
       }
-      if (productMode === "new" && existingProducts.includes(productName)) {
+      if (productMode === "new" && hasName(existingProducts, productName)) {
         setIsEditingProduct(true);
         showRequiredError("product-editor", `An API Product named "${productName}" already exists. Use a different name.`);
         return;
       }
       if (productMode === "existing" && !existingProduct) {
         setIsEditingProduct(true);
+        setProductValidationAttempted(true);
         showRequiredError("product-editor", "Select an existing API Product before continuing.");
         return;
       }
-      if (developerMode === "new" && (!developerFirstName.trim() || !developerLastName.trim() || !developerEmail.trim() || !developerName.trim())) {
+      if (productMode === "existing" && !productResourcePath.trim().startsWith("/")) {
+        setIsEditingProduct(true);
+        showRequiredError("product-editor", "Enter an operation path beginning with / for the existing API Product.");
+        return;
+      }
+      if (appMode === "new" && developerMode === "new" && (!developerFirstName.trim() || !developerLastName.trim() || !developerEmail.trim() || !developerName.trim())) {
         setIsEditingDeveloper(true);
         setDeveloperValidationAttempted(true);
         showRequiredError("developer-editor", "Complete all required Developer fields before continuing.");
         return;
       }
-      if (developerMode === "existing" && !existingDeveloper) {
+      if (appMode === "new" && developerMode === "new" && hasName(existingDevelopers, developerEmail)) {
+        setIsEditingDeveloper(true);
+        showRequiredError("developer-editor", "A developer with this email already exists.");
+        return;
+      }
+      if (appMode === "new" && developerMode === "existing" && !existingDeveloper) {
         setIsEditingDeveloper(true);
         showRequiredError("developer-editor", "Select an existing Developer before continuing.");
         return;
@@ -679,7 +761,12 @@ export default function App() {
         showRequiredError("app-editor", "Enter an App Name before continuing.");
         return;
       }
-      if (appMode === "new" && existingApps.includes(appName)) {
+      if (appMode === "new" && developerMode === "existing" && (developerAppsLoading || developerAppsError)) {
+        setIsEditingApp(true);
+        showRequiredError("app-editor", developerAppsError || "Wait until the developer's apps finish loading.");
+        return;
+      }
+      if (appMode === "new" && developerMode === "existing" && hasName(developerApps, appName)) {
         setIsEditingApp(true);
         showRequiredError("app-editor", `A Developer App named "${appName}" already exists. Use a different name.`);
         return;
@@ -687,6 +774,11 @@ export default function App() {
       if (appMode === "existing" && !existingApp) {
         setIsEditingApp(true);
         showRequiredError("app-editor", "Select an existing Developer App before continuing.");
+        return;
+      }
+      if (appMode === "existing" && (developerMode !== "existing" || appsWithOwnersLoading || appsWithOwnersError || !appsWithOwners.some((app) => app.name === existingApp && app.email === existingDeveloper))) {
+        setIsEditingApp(true);
+        showRequiredError("app-editor", "Select an app belonging to the selected existing developer.");
         return;
       }
     }
@@ -702,7 +794,7 @@ export default function App() {
         showRequiredError("target-editor", "Complete all required Target Server fields before continuing.");
         return;
       }
-      if (targetMode === "new" && targets.includes(newTarget)) {
+      if (targetMode === "new" && hasName(targets, newTarget)) {
         setIsEditingTarget(true);
         showRequiredError("target-editor", `A Target Server named "${newTarget}" already exists in ${env}. Use a different name.`);
         return;
@@ -731,13 +823,7 @@ export default function App() {
             : null;
 
     if (activeEditor) {
-      setNotice(unsavedChangesMessage);
-      requestAnimationFrame(() => {
-        document.getElementById(activeEditor)?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      });
+      showRequiredError(activeEditor, unsavedChangesMessage);
       return;
     }
 
@@ -749,7 +835,7 @@ export default function App() {
     setSubmitting(true);
     try {
       const created = await apiClient.createRequest(buildRequestInput(false));
-      setNotice(`Draft ${created.id} saved.`);
+      setNotice(`Draft ${created.id} saved.`, false);
       setPage("requests");
     } catch (error) {
       setNotice(
@@ -761,6 +847,14 @@ export default function App() {
   };
 
   const submit = async () => {
+    setSubmitError("");
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(api.trim())) {
+      setStep(1);
+      setIsEditingDetails(true);
+      setDetailsValidationAttempted(true);
+      setNotice("Correct the proxy name before submitting.");
+      return;
+    }
     setSubmitting(true);
     try {
       const created = await apiClient.createRequest(buildRequestInput(true));
@@ -768,9 +862,7 @@ export default function App() {
       setNotice("");
       setPage("provisioning");
     } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : "Unable to submit the request."
-      );
+      setSubmitError(error instanceof Error ? error.message : "Unable to submit the request.");
     } finally {
       setSubmitting(false);
     }
@@ -778,9 +870,10 @@ export default function App() {
 
   const nav = (label: string, destination: Page, icon: SidebarIconName) => (
     <button
-      className={`nav ${page === destination ? "active" : ""}`}
+      className={`nav ${page === destination && (destination !== "resources" || !resourceView) ? "active" : ""}`}
       title={label}
       onClick={() => {
+        if (destination === "resources") setResourceView(null);
         setPage(destination);
         closeSidebarOnSmallScreen();
       }}
@@ -1067,10 +1160,17 @@ export default function App() {
 
         {panel(
           <>
-            <div className="section-title-row" id="product-editor">
+            <div id="product-editor">
+            {sectionError?.id === "product-editor" && <p className="edit-required-message" role="alert">{sectionError.message}</p>}
+            <div className="section-title-row">
               <h3>C. API Product</h3>
               <button className="edit-button" type="button" onClick={() => {
                   if (isEditingProduct) {
+                    if (productMode === "existing" && (!existingProduct || !productResourcePath.trim().startsWith("/"))) {
+                      setProductValidationAttempted(true);
+                      setNotice("Select an existing API Product and enter an operation path beginning with /.");
+                      return;
+                    }
                     if (productMode === "new" && (!productName.trim() || !productDisplayName.trim() || !productEnvironment || !productAccess || !productApproval || !productProxy || !productResourcePath.trim())) {
                       setProductValidationAttempted(true);
                       return;
@@ -1080,6 +1180,7 @@ export default function App() {
                       return;
                     }
                     setIsEditingProduct(false);
+                    setSectionError(null);
                     setProductValidationAttempted(false);
                     setNotice("");
                   } else {
@@ -1089,6 +1190,7 @@ export default function App() {
                   {isEditingProduct ? "Save" : "Edit"}
                 </button>
             </div>
+            </div>
             <p>
               API Products define which API resources and access
               conditions a consumer application can use.
@@ -1096,6 +1198,7 @@ export default function App() {
 
             {choose(productMode, (mode) => {
               setProductMode(mode);
+              setProductValidationAttempted(false);
               setIsEditingProduct(false);
             })}
 
@@ -1105,7 +1208,7 @@ export default function App() {
                 {isEditingProduct && productValidationAttempted && <p className="edit-required-message">Please complete all required API Product fields.</p>}
                 {notice.includes("API Product") && notice !== unsavedChangesMessage && <p className="edit-required-message">{notice}</p>}
                 <div className="product-settings-box">
-                  {field("Product Name *", productName, setProductName, "Product name", "text", !isEditingProduct)}
+                  {field("Product Name *", productName, setProductName, "Product name", "text", !isEditingProduct, hasName(existingProducts, productName) ? "An API product with this name already exists." : null)}
                   {field(
                     "Display Name *",
                     productDisplayName,
@@ -1231,12 +1334,25 @@ export default function App() {
             ) : (
               <div className="form">
                 {select(
-                  "Existing API Product",
+                  "Existing API Product *",
                   existingProduct,
                   setExistingProduct,
                   existingProducts,
-                  !isEditingProduct
+                  !isEditingProduct,
+                  productValidationAttempted && !existingProduct ? "Select an existing API product." : null
                 )}
+                <div className="product-settings-box proxy-settings-box">
+                  {field("API Proxy *", api, () => {}, "Proxy name", "text", true)}
+                  {field("Path *", productResourcePath, setProductResourcePath, "Path", "text", !isEditingProduct)}
+                  <label className="field method-picker" ref={methodsDropdownRef}>
+                    <span>Methods</span>
+                    <button type="button" className="method-picker-trigger" disabled={!isEditingProduct} aria-expanded={methodsDropdownOpen} onClick={() => setMethodsDropdownOpen((open) => !open)}>
+                      <span className={selectedProductMethods.length ? "method-picker-value" : "method-picker-placeholder"}>{selectedProductMethods.length ? selectedProductMethods.join(", ") : "Select methods"}</span><ChevronDown size={16} aria-hidden="true" />
+                    </button>
+                    {methodsDropdownOpen && <div className="method-picker-menu">{methodOptions.map((method) => <label key={method} className="method-picker-option"><input type="checkbox" checked={selectedProductMethods.includes(method)} onChange={() => toggleProductMethod(method)} />{method}</label>)}</div>}
+                    <small className="method-picker-help">If no methods are selected, all methods are allowed.</small>
+                  </label>
+                </div>
               </div>
             )}
 
@@ -1247,10 +1363,78 @@ export default function App() {
           </>
         )}
 
+
         {panel(
           <>
-            <div className="section-title-row" id="developer-editor">
-              <h3>D. Developer</h3>
+            <div id="app-editor">
+            {sectionError?.id === "app-editor" && <p className="edit-required-message" role="alert">{sectionError.message}</p>}
+            <div className="section-title-row">
+              <h3>D. Developer App</h3>
+              <button className="edit-button" type="button" onClick={() => {
+                  if (isEditingApp) {
+                    if (appMode === "new" && !appName.trim()) {
+                      setAppValidationAttempted(true);
+                      return;
+                    }
+                    if (appMode === "new" && developerMode === "existing" && developerApps.some((name) => name.trim().toLowerCase() === appName.trim().toLowerCase())) {
+                      setNotice(`A Developer App named "${appName}" already exists. Use a different name.`);
+                      return;
+                    }
+                    setIsEditingApp(false);
+                    setSectionError(null);
+                    setAppValidationAttempted(false);
+                    setNotice("");
+                  } else {
+                    setIsEditingApp(true);
+                  }
+                }}>
+                  {isEditingApp ? "Save" : "Edit"}
+                </button>
+            </div>
+            </div>
+            <p>
+              A Developer App represents the application that
+              consumes the API and holds its credentials.
+            </p>
+
+            {choose(appMode, (mode) => {
+              setAppMode(mode);
+              setExistingApp("");
+              setIsEditingApp(false);
+            })}
+
+            {appMode === "new" ? (
+              <div className="form">
+                {isEditingApp && notice === unsavedChangesMessage && <p className="edit-required-message">Save your Developer App changes before continuing.</p>}
+                {isEditingApp && appValidationAttempted && <p className="edit-required-message">Enter an App Name.</p>}
+                {notice.includes("Developer App") && notice !== unsavedChangesMessage && <p className="edit-required-message">{notice}</p>}
+                {field("App Name *", appName, setAppName, "App name", "text", !isEditingApp, appValidationAttempted && !appName.trim() ? "Enter app name" : developerMode === "existing" && hasName(developerApps, appName) ? "This developer already has an app with this name." : null)}
+                {field("Display Name", appDisplayName, setAppDisplayName, "Display name", "text", !isEditingApp)}
+                {developerMode === "existing" && developerAppsLoading && <p className="field-help">Checking the selected developer's apps…</p>}
+                {developerMode === "existing" && developerAppsError && <p className="edit-required-message" role="alert">{developerAppsError}</p>}
+              </div>
+            ) : (
+              <div className="form">
+                <label className="field"><span>Existing Developer App</span>
+                  <select value={existingApp && existingDeveloper ? JSON.stringify([existingApp, existingDeveloper]) : ""} disabled={!isEditingApp || appsWithOwnersLoading || Boolean(appsWithOwnersError)} onChange={(event) => {
+                    if (!event.target.value) return;
+                    const [name, email] = JSON.parse(event.target.value) as [string, string];
+                    setExistingApp(name); setExistingDeveloper(email); setDeveloperMode("existing"); setIsEditingDeveloper(false);
+                  }}>
+                    <option value="" disabled>Select app and owner</option>
+                    {appsWithOwners.map((app) => <option key={JSON.stringify([app.name, app.email])} value={JSON.stringify([app.name, app.email])}>{app.name} — {app.email}</option>)}
+                  </select>
+                </label>
+                {appsWithOwnersLoading ? <p className="field-help">Loading apps and owners…</p> : appsWithOwnersError ? <p className="edit-required-message" role="alert">{appsWithOwnersError}</p> : !appsWithOwners.length ? <p className="field-help">No developer apps found.</p> : null}
+              </div>
+            )}
+
+        {appMode === "new" && panel(
+          <>
+            <div id="developer-editor">
+            {sectionError?.id === "developer-editor" && <p className="edit-required-message" role="alert">{sectionError.message}</p>}
+            <div className="section-title-row">
+              <h3>Developer</h3>
               <button className="edit-button" type="button" onClick={() => {
                   if (isEditingDeveloper) {
                     if (
@@ -1265,6 +1449,7 @@ export default function App() {
                       return;
                     }
                     setIsEditingDeveloper(false);
+                    setSectionError(null);
                     setDeveloperValidationAttempted(false);
                     setNotice("");
                   } else {
@@ -1274,6 +1459,7 @@ export default function App() {
                   {isEditingDeveloper ? "Save" : "Edit"}
                 </button>
             </div>
+            </div>
             <p>
               A Developer represents the consumer or partner
               registered in Apigee.
@@ -1281,6 +1467,7 @@ export default function App() {
 
             {choose(developerMode, (mode) => {
               setDeveloperMode(mode);
+              setExistingApp("");
               setIsEditingDeveloper(false);
               setDeveloperValidationAttempted(false);
             })}
@@ -1311,7 +1498,7 @@ export default function App() {
                   setDeveloperEmail,
                   "Email *",
                   "email",
-                  developerValidationAttempted && !developerEmail.trim() ? "Enter developer's email" : null
+                  developerValidationAttempted && !developerEmail.trim() ? "Enter developer's email" : hasName(existingDevelopers, developerEmail) ? "A developer with this email already exists." : null
                 )}
                 {developerField(
                   "Username *",
@@ -1327,7 +1514,7 @@ export default function App() {
                 {select(
                   "Existing Developer",
                   existingDeveloper,
-                  setExistingDeveloper,
+                  (value) => { setExistingDeveloper(value); setExistingApp(""); },
                   existingDevelopers,
                   !isEditingDeveloper
                 )}
@@ -1336,61 +1523,8 @@ export default function App() {
           </>
         )}
 
-        {panel(
-          <>
-            <div className="section-title-row" id="app-editor">
-              <h3>E. Developer App</h3>
-              <button className="edit-button" type="button" onClick={() => {
-                  if (isEditingApp) {
-                    if (appMode === "new" && !appName.trim()) {
-                      setAppValidationAttempted(true);
-                      return;
-                    }
-                    if (appMode === "new" && existingApps.some((name) => name.trim().toLowerCase() === appName.trim().toLowerCase())) {
-                      setNotice(`A Developer App named "${appName}" already exists. Use a different name.`);
-                      return;
-                    }
-                    setIsEditingApp(false);
-                    setAppValidationAttempted(false);
-                    setNotice("");
-                  } else {
-                    setIsEditingApp(true);
-                  }
-                }}>
-                  {isEditingApp ? "Save" : "Edit"}
-                </button>
-            </div>
-            <p>
-              A Developer App represents the application that
-              consumes the API and holds its credentials.
-            </p>
-
-            {choose(appMode, (mode) => {
-              setAppMode(mode);
-              setIsEditingApp(false);
-            })}
-
-            {appMode === "new" ? (
-              <div className="form">
-                {isEditingApp && notice === unsavedChangesMessage && <p className="edit-required-message">Save your Developer App changes before continuing.</p>}
-                {isEditingApp && appValidationAttempted && <p className="edit-required-message">Enter an App Name.</p>}
-                {notice.includes("Developer App") && notice !== unsavedChangesMessage && <p className="edit-required-message">{notice}</p>}
-                {field("App Name *", appName, setAppName, "App name", "text", !isEditingApp, appValidationAttempted && !appName.trim() ? "Enter app name" : null)}
-              </div>
-            ) : (
-              <div className="form">
-                {select(
-                  "Existing Developer App",
-                  existingApp,
-                  setExistingApp,
-                  existingApps,
-                  !isEditingApp
-                )}
-              </div>
-            )}
-
             <div className="callout">
-              The app must belong to the selected Developer.
+              Selecting an existing app also selects its owner as the Developer.
               The backend will validate existing product
               associations before making changes.
             </div>
@@ -1486,7 +1620,7 @@ export default function App() {
           ))}
         </div>
 
-        {notice && <div className={`notice ${notice === unsavedChangesMessage ? "notice-error" : ""}`}>{notice}</div>}
+        {notice && <div className={`notice ${noticeIsError ? "notice-error" : ""}`} role={noticeIsError ? "alert" : "status"}>{notice}</div>}
 
         {/* STEP 1: YAML */}
         {step === 0 && (
@@ -1596,7 +1730,7 @@ paths: {}`}
                       }
 
                       setNotice(
-                        `OpenAPI specification validated by the backend. Found ${result.resources.length} resources and ${result.totalOperations} operations.`
+                        `OpenAPI specification validated by the backend. Found ${result.resources.length} resources and ${result.totalOperations} operations.`, false
                       );
                     } catch (error) {
                       setValid(false);
@@ -1658,11 +1792,17 @@ paths: {}`}
             <div className="columns">
               {panel(
                 <div id="api-details-editor">
+                  {sectionError?.id === "api-details-editor" && <p className="edit-required-message" role="alert">{sectionError.message}</p>}
                   <div className="section-title-row">
                     <h2>Step 2: API Details</h2>
                     <button className="edit-button" type="button" onClick={() => {
                       if (isEditingDetails) {
-                        if (!api.trim() || !display.trim() || !basePath.trim() || !version.trim() || !description.trim() || !env) {
+                        if (!resourcesLoaded || resourceLoadError) {
+                          setDetailsValidationAttempted(true);
+                          setNotice(resourceLoadError ? `Cannot verify existing resources: ${resourceLoadError}` : "Wait until existing resources finish loading.");
+                          return;
+                        }
+                        if (!/^[a-z0-9][a-z0-9-]*$/.test(api.trim()) || !display.trim() || !basePath.trim() || !version.trim() || !description.trim() || !env) {
                           setDetailsValidationAttempted(true);
                           setNotice("Complete all required API Details fields before saving.");
                           return;
@@ -1678,6 +1818,7 @@ paths: {}`}
                           return;
                         }
                         setIsEditingDetails(false);
+                        setSectionError(null);
                         setDetailsValidationAttempted(false);
                         setNotice("");
                       } else {
@@ -1695,14 +1836,14 @@ paths: {}`}
                   {isEditingDetails && notice === unsavedChangesMessage && (
                     <p className="edit-required-message">Save your API details before continuing.</p>
                   )}
-                  {isEditingDetails && detailsValidationAttempted && (
+                  {isEditingDetails && detailsValidationAttempted && !sectionError && notice && (
                     <p className="edit-required-message">{notice || "Complete all required API Details fields before saving."}</p>
                   )}
 
                   <div className="form">
-                    {field("Proxy Name *", api, setApi, "", "text", !isEditingDetails, detailsValidationAttempted && !api.trim() ? "Enter proxy name" : null)}
+                    {field("Proxy Name *", api, setApi, "", "text", !isEditingDetails, detailsValidationAttempted && !api.trim() ? "Enter proxy name" : detailsValidationAttempted && !/^[a-z0-9][a-z0-9-]*$/.test(api.trim()) ? "Use lowercase letters, numbers and hyphens; start with a letter or number." : hasName(existingProxies, api) ? "A proxy with this name already exists." : null)}
                     {field("Display Name *", display, setDisplay, "", "text", !isEditingDetails, detailsValidationAttempted && !display.trim() ? "Enter display name" : null)}
-                    {field("Base Path *", basePath, setBasePath, "", "text", !isEditingDetails, detailsValidationAttempted && !basePath.trim() ? "Enter base path" : null)}
+                    {field("Base Path *", basePath, setBasePath, "", "text", !isEditingDetails, detailsValidationAttempted && !basePath.trim() ? "Enter base path" : duplicatePath ? `This base path already exists in ${env}.` : null)}
                     {field("API Version *", version, setVersion, "", "text", !isEditingDetails, detailsValidationAttempted && !version.trim() ? "Enter API version" : null)}
                     {field("Description *", description, setDescription, "", "text", !isEditingDetails, detailsValidationAttempted && !description.trim() ? "Enter description" : null)}
                     {select(
@@ -1723,6 +1864,7 @@ paths: {}`}
             </div>
 
             <section className="panel generated-resources-panel" id="operations-editor">
+              {sectionError?.id === "operations-editor" && <p className="edit-required-message" role="alert">{sectionError.message}</p>}
               <div className="generated-resources-heading">
                 <div>
                   <h2>Generated API Resources & Conditional Flows</h2>
@@ -1736,6 +1878,7 @@ paths: {}`}
                   <button className="edit-button" type="button" disabled={!parsedSpec} onClick={() => {
                     if (isEditingOperations) {
                       setIsEditingOperations(false);
+                      setSectionError(null);
                       setNotice("");
                     } else {
                       setIsEditingOperations(true);
@@ -1909,7 +2052,9 @@ paths: {}`}
           <div className="columns">
             {panel(
               <>
-                <div className="section-title-row" id="target-editor">
+                <div id="target-editor">
+                {sectionError?.id === "target-editor" && <p className="edit-required-message" role="alert">{sectionError.message}</p>}
+                <div className="section-title-row">
                   <h2>Step 4: Target & Backend Configuration</h2>
                   <button className="edit-button" type="button" onClick={() => {
                       if (isEditingTarget) {
@@ -1922,6 +2067,7 @@ paths: {}`}
                           return;
                         }
                         setIsEditingTarget(false);
+                        setSectionError(null);
                         setTargetValidationAttempted(false);
                         setNotice("");
                       } else {
@@ -1930,6 +2076,7 @@ paths: {}`}
                     }}>
                       {isEditingTarget ? "Save" : "Edit"}
                     </button>
+                </div>
                 </div>
                 <p>
                   Choose an existing Target Server or create
@@ -1962,7 +2109,8 @@ paths: {}`}
                       setNewTarget,
                       "",
                       "text",
-                      !isEditingTarget
+                      !isEditingTarget,
+                      hasName(targets, newTarget) ? `A target server with this name already exists in ${env}.` : null
                     )}
                     {field(
                       "Host *",
@@ -2034,9 +2182,9 @@ paths: {}`}
             onChange={setPolicyConfig}
             onEditingChange={(editing) => {
               setIsEditingPolicies(editing);
-              if (!editing) setNotice("");
+              if (!editing) { setNotice(""); setSectionError(null); }
             }}
-            needsSaveAttention={notice === unsavedChangesMessage}
+            needsSaveAttention={sectionError?.id === "policies-editor"}
           />
         )}
 
@@ -2214,6 +2362,7 @@ paths: {}`}
           </div>
         )}
 
+        {step === 5 && submitError && <div className="notice notice-error" role="alert">{submitError}</div>}
         <div className="footer">
           <button
             className="secondary"
@@ -2245,7 +2394,7 @@ paths: {}`}
               </button>
             ) : (
               <button className="primary" onClick={submit} disabled={submitting}>
-                {submitting ? "Submitting…" : <>Submit Request <ArrowRight size={16} aria-hidden="true" /></>}
+                {submitting ? "Submitting…" : <>Submit <ArrowRight size={16} aria-hidden="true" /></>}
               </button>
             )}
           </div>
@@ -2259,7 +2408,7 @@ paths: {}`}
     { label: "Dashboard", go: () => setPage("home") },
     { label: "Create API", go: goCreate },
     { label: "Publish API", go: () => setPage("publish") },
-    { label: "Access / Read Only", go: () => setPage("resources") },
+    { label: "Access / Read Only", go: () => { setResourceView(null); setPage("resources"); } },
     { label: "Approve Requests", go: () => setPage("approve") },
     { label: "My requests", go: () => setPage("requests") },
   ];
@@ -2467,23 +2616,23 @@ paths: {}`}
 
         <hr />
 
-        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+        <button className={`nav ${page === "resources" && resourceView === "API Proxies" ? "active" : ""}`} onClick={() => { setResourceView("API Proxies"); setPage("resources"); closeSidebarOnSmallScreen(); }}>
           <Layers className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">API Proxies</span>
         </button>
 
-        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+        <button className={`nav ${page === "resources" && resourceView === "API Products" ? "active" : ""}`} onClick={() => { setResourceView("API Products"); setPage("resources"); closeSidebarOnSmallScreen(); }}>
           <Package className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">API Products</span>
         </button>
 
-        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+        <button className={`nav ${page === "resources" && ["Consumers", "Developers", "Developer Apps"].includes(resourceView ?? "") ? "active" : ""}`} onClick={() => { setResourceView("Consumers"); setPage("resources"); closeSidebarOnSmallScreen(); }}>
           <Users className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">Consumers</span>
         </button>
 
-        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+        <button className={`nav ${page === "resources" && resourceView === "Target Servers" ? "active" : ""}`} onClick={() => { setResourceView("Target Servers"); setPage("resources"); closeSidebarOnSmallScreen(); }}>
           <Server className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">Target Servers</span>
         </button>
 
-        <button className="nav" onClick={() => { setPage("resources"); closeSidebarOnSmallScreen(); }}>
+        <button className={`nav ${page === "resources" && resourceView === "Shared Flows" ? "active" : ""}`} onClick={() => { setResourceView("Shared Flows"); setPage("resources"); closeSidebarOnSmallScreen(); }}>
           <GitBranch className="nav-icon" size={18} strokeWidth={1.8} aria-hidden="true" /><span className="nav-label">Shared Flows</span>
         </button>
 
@@ -2685,75 +2834,101 @@ paths: {}`}
                     ))}
                   </tbody>
                 </table>
-                <p>{notice}</p>
+                {notice && <p className={noticeIsError ? "notice notice-error" : "notice"} role={noticeIsError ? "alert" : "status"}>{notice}</p>}
               </>
             )}
           </>
         ) : page === "resources" ? (
           <>
-            {title(
+            {resourceView ? <div className="heading"><h1>{resourceView}</h1></div> : title(
               "Access / Read Only",
-              "Browse resources currently available in Apigee."
+              "APIs successfully provisioned through this portal."
             )}
 
-            <div className="resource-grid">
-              {[
-                ["API Products", String(existingProducts.length)],
-                ["Developers", String(existingDevelopers.length)],
-                ["Developer Apps", String(existingApps.length)],
-                ["Target Servers", String(targets.length)],
-                ["Shared Flows", String(resources.sharedFlows[env]?.length ?? 0)],
-              ].map((item) =>
-                panel(
-                  <>
-                    <strong className="count">{item[1]}</strong>
-                    <h2>{item[0]}</h2>
-                    <p>Browse existing Apigee resources.</p>
-                    <button className="secondary">
-                      View {item[0]}
-                    </button>
-                  </>
-                )
-              )}
-            </div>
+            {resourceView ? (
+              <section className="panel">
+                {(resourceView === "Developers" || resourceView === "Developer Apps") && (
+                  <button className="secondary resource-back-button" type="button" onClick={() => setResourceView("Consumers")}>
+                    <ArrowLeft size={16} aria-hidden="true" /> Back
+                  </button>
+                )}
+                {resourceView === "Consumers" ? (
+                  <div className="resource-grid">
+                    {["Developers", "Developer Apps"].map((kind) => (
+                      <div className="panel" key={kind}>
+                        <h2>{kind}</h2>
+                        <button className="secondary" type="button" onClick={() => setResourceView(kind)}>View</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                (() => {
+                  const items: Record<string, string[]> = {
+                    "API Proxies": existingProxies,
+                    "API Products": existingProducts,
+                    "Developers": existingDevelopers,
+                    "Developer Apps": existingApps,
+                    "Target Servers": targets,
+                    "Shared Flows": resources.sharedFlows[env] ?? [],
+                  };
+                  const selected = items[resourceView] ?? [];
+                  return selected.length ? (
+                    <table><thead><tr><th scope="col">{resourceView === "Developers" ? "Email" : "Name"}</th></tr></thead>
+                      <tbody>{selected.map((name) => <tr key={name}><td>{name}</td></tr>)}</tbody>
+                    </table>
+                  ) : <p>No {resourceView.toLowerCase()} available.</p>;
+                })()
+                )}
+              </section>
+            ) : <section className="panel">
+              <h2>Published APIs</h2>
+              {publishError && <p className="edit-required-message">{publishError}</p>}
+              {publishedSelection ? <>
+                <button className="secondary" onClick={() => { setPublishedSelection(null); setPublishedSpec(null); }}>Back</button>
+                <h3>{publishedSelection.title}</h3><p>{publishedSelection.description}</p>
+                <p>API Product: {publishedSelection.product}</p>
+                {publishedSpec?.resources.map((resource) => <div key={resource.path}><h4>{resource.path}</h4>{resource.operations.map((operation) => <p key={operation.id}><strong>{operation.method}</strong> {operation.summary || operation.operationId}</p>)}</div>)}
+                <details><summary>OpenAPI document</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{publishedSelection.specContent}</pre></details>
+              </> : publishedApis.length ? <table><thead><tr><th>API</th><th>Product</th><th>Published</th><th>Documentation</th></tr></thead><tbody>
+                {publishedApis.map((entry) => <tr key={entry.product}><td>{entry.title}</td><td>{entry.product}</td><td>{new Date(entry.publishedAt).toLocaleDateString()}</td><td><button className="secondary" onClick={async () => { try { setPublishedSpec(await apiClient.validateSpec(entry.specContent)); setPublishedSelection(entry); setPublishError(""); } catch (error) { setPublishError(error instanceof Error ? error.message : "Unable to open documentation."); } }}>View</button></td></tr>)}
+              </tbody></table> : <p>No published APIs yet.</p>}
+              <h2>Completed APIs</h2>
+              {requests.filter((request) => request.status === "COMPLETED" && request.dryRun === false).length ? (
+                <table>
+                  <thead><tr><th>API</th><th>Environment</th><th>Completed</th></tr></thead>
+                  <tbody>{requests.filter((request) => request.status === "COMPLETED" && request.dryRun === false).map((request) => (
+                    <tr key={request.id}><td>{request.apiName}</td><td>{request.environment}</td><td>{new Date(request.updatedAt).toLocaleString()}</td></tr>
+                  ))}</tbody>
+                </table>
+              ) : <p>No completed live APIs found.</p>}
+            </section>}
           </>
         ) : page === "publish" ? (
           <>
             {title(
               "Publish API",
-              "Deploy an existing proxy revision to an Apigee environment."
+              "Publish an API product and its documentation to this portal."
             )}
 
             {panel(
               <>
-                <h2>Publish an existing proxy</h2>
-
-                {select(
-                  "API Proxy",
-                  existingProducts[0] ?? "",
-                  () => {},
-                  existingProducts
-                )}
-
-                {select(
-                  "Target Environment",
-                  env,
-                  setEnv,
-                  environments
-                )}
-
-                <button
-                  className="primary"
-                  onClick={() =>
-                    setNotice(
-                      "Publishing is handled by the live provisioning workflow after an onboarding request is submitted."
-                    )
-                  }
-                >
-                  Review Publish <ArrowRight size={16} aria-hidden="true" />
-                </button>
-
-                <p>{notice}</p>
+                <h2>Publish an API product</h2>
+                <p>Published documentation will be visible to anyone with access to this portal. User roles are not configured yet.</p>
+                {select("API Product *", publishProduct, setPublishProduct, existingProducts)}
+                {field("Display title *", publishTitle, setPublishTitle, "Display title")}
+                {field("Description", publishDescription, setPublishDescription, "Description")}
+                <label className="field"><span>OpenAPI document *</span><input type="file" accept=".yaml,.yml,.json,application/json" onChange={async (event) => { const file = event.target.files?.[0]; setPublishFile(file?.name ?? ""); setPublishSpec(file ? await file.text() : ""); }} /></label>
+                {publishFile && <p>{publishFile}</p>}
+                {publishError && <p className="edit-required-message">{publishError}</p>}
+                <button className="primary" disabled={publishing} onClick={async () => {
+                  if (!publishProduct || !publishTitle.trim() || !publishSpec) { setPublishError("Select a product and OpenAPI document and enter a display title."); return; }
+                  setPublishing(true); setPublishError("");
+                  try {
+                    await apiClient.publishApi({ product: publishProduct, title: publishTitle, description: publishDescription, specContent: publishSpec, environment: env });
+                    setPublishedApis(await apiClient.publishedApis()); setResourceView(null); setPublishedSelection(null); setPage("resources");
+                  } catch (error) { setPublishError(error instanceof Error ? error.message : "Unable to publish API."); }
+                  finally { setPublishing(false); }
+                }}>{publishing ? "Publishing…" : "Publish"}</button>
               </>,
               "narrow"
             )}
@@ -2800,7 +2975,7 @@ paths: {}`}
                   </tbody>
                 </table>
 
-                <p>{notice}</p>
+                {notice && <p className={noticeIsError ? "notice notice-error" : "notice"} role={noticeIsError ? "alert" : "status"}>{notice}</p>}
               </>
             )}
           </>

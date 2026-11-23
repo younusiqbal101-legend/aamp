@@ -73,9 +73,8 @@ export default function ProvisioningConsole({
         setError(
           err instanceof Error ? err.message : "Unable to load request status."
         );
-        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) return;
       }
-      timer = window.setTimeout(poll, POLL_INTERVAL_MS);
+      timer = window.setTimeout(poll, consecutiveErrors >= MAX_CONSECUTIVE_ERRORS ? 5000 : POLL_INTERVAL_MS);
     };
 
     void poll();
@@ -286,6 +285,7 @@ export default function ProvisioningConsole({
           type="button"
           className="secondary-action"
           onClick={onViewRequests}
+          disabled={!isFinished}
         >
           View My Requests
         </button>
@@ -294,13 +294,14 @@ export default function ProvisioningConsole({
           type="button"
           className="primary-action"
           onClick={onCreateAnother}
+          disabled={!isFinished}
         >
           Create Another API
         </button>
       </div>
 
       {error && (
-        <p className="simulation-notice" role="alert">
+        <p className="notice notice-error" role="alert">
           {error}
         </p>
       )}

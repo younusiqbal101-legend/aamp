@@ -43,7 +43,7 @@ export interface RequestPayload {
     oauthScopes?: string;
   };
   developer: { mode: string; name: string; firstName?: string; lastName?: string; email: string };
-  developerApp: { mode: string; name: string };
+  developerApp: { mode: string; name: string; displayName?: string };
   target: {
     mode: string;
     name: string;

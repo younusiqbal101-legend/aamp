@@ -593,7 +593,8 @@ textarea:disabled {
   cursor: not-allowed;
 }
 
-.field.has-error input {
+.field.has-error input,
+.field.has-error select {
   border-color: #e52b78;
 }
 
@@ -696,10 +697,30 @@ textarea {
 
 .primary,
 .secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border-radius: 8px;
   padding: 10px 15px;
   font-size: 12px;
   font-weight: 750;
+}
+
+.primary svg,
+.secondary svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.resource-back-button {
+  margin-bottom: 18px;
+}
+
+.home-card b:has(svg) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .primary {
@@ -736,6 +757,10 @@ textarea {
   background: #fce8e6;
   border: 1px solid #e59a96;
   color: #a50e0e;
+}
+
+#api-details-editor, #operations-editor, #product-editor, #developer-editor, #app-editor, #target-editor, #policies-editor {
+  scroll-margin-top: 100px;
 }
 .edit-required-message {
   margin: 12px 0;
@@ -2456,6 +2481,14 @@ th {
   background: #1d4ed8;
 }
 
+.provisioning-actions button:disabled {
+  background: #e4e8ee;
+  border-color: #d1d8e1;
+  color: #7a8797;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
 .simulation-notice {
   margin-top: 20px;
   color: #9299a8;
@@ -2974,7 +3007,21 @@ main { padding-top: 92px; }
 .primary:hover { background: #0842a0; border-color: #0842a0; }
 .primary:disabled { background: #b8c3d4; border-color: #b8c3d4; color: #718096; opacity: 1; }
 .secondary, .edit-button { background: #fff; border-color: #7c9bc5; color: #174ea6; border-radius: 18px; font-weight: 600; }
-.footer { background: #eef3fbf2; }
+.footer {
+  background: transparent;
+  border-top: 0;
+}
+
+.footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.footer button svg {
+  flex: 0 0 auto;
+}
 /* One rounded visual system across the portal. */
 button,
 input:not([type="checkbox"]):not([type="file"]),
@@ -4291,12 +4338,7 @@ main {
   font-weight: 500;
 }
 
-/* Tables: sticky header, sortable column buttons, row hover (light and dark). */
-.panel table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
+/* Tables: sortable column buttons and row hover (light and dark). */
 
 .panel table tbody tr:hover td {
   background: #f5f8fd;
