@@ -1,6 +1,7 @@
 import { envFile, envFileFound } from "./env"; // must come first: loads .env before ./app reads it
 import app from "./app";
 import { providerInfo } from "./provisioning";
+import { usePostgres } from "./db";
 
 const PORT = Number(process.env.PORT) || 5000;
 
@@ -36,7 +37,12 @@ async function main() {
       : `APIGEE, org "${info.org}", LIVE (real changes will be made in Apigee)`;
     console.log(`\nBackend running on http://localhost:${PORT}`);
     console.log(`  .env file : ${envFile} ${envFileFound ? "(loaded)" : "(NOT FOUND - using defaults)"}`);
-    console.log(`  Mode      : ${mode}\n`);
+    console.log(`  Mode      : ${mode}`);
+    console.log(
+      usePostgres
+        ? "  Storage   : PostgreSQL (DATABASE_URL)\n"
+        : "  Storage   : IN-MEMORY (no DATABASE_URL; requests are lost on restart)\n"
+    );
   });
 }
 

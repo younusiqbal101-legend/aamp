@@ -46,6 +46,8 @@ export type RequestDetail = RequestSummary & {
   logs: string[];
   provider?: ProviderInfo;
   result?: ProvisioningResult;
+  /** Only returned for drafts, so the wizard can be reopened. */
+  payload?: Partial<CreateRequestInput>;
 };
 
 export type ResourceCatalog = {
@@ -60,6 +62,8 @@ export type ResourceCatalog = {
 
 export type CreateRequestInput = {
   submit: boolean;
+  /** Wizard step (0-5) the user is on, so a saved draft reopens there. */
+  wizardStep: number;
   apiName: string;
   displayName: string;
   environment: string;
@@ -142,4 +146,11 @@ export const api = {
     }),
   listRequests: () => request<RequestSummary[]>("/requests"),
   getRequest: (id: string) => request<RequestDetail>(`/requests/${id}`),
+  updateRequest: (id: string, input: CreateRequestInput) =>
+    request<RequestDetail>(`/requests/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  submitRequest: (id: string) =>
+    request<RequestDetail>(`/requests/${id}/submit`, { method: "POST" }),
 };

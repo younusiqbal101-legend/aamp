@@ -35,6 +35,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   api as apiClient,
   type BackendHealth,
+  type CreateRequestInput,
   type RequestSummary,
   type ResourceCatalog,
   type PublishedApi,
@@ -328,6 +329,8 @@ export default function App() {
   );
 
   const [requestId, setRequestId] = useState("");
+  // ID of the draft currently open in the wizard; saving updates it instead of creating a new one.
+  const [draftId, setDraftId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [validating, setValidating] = useState(false);
   const [requests, setRequests] = useState<RequestSummary[]>([]);
@@ -455,8 +458,9 @@ export default function App() {
       );
   }, [page]);
 
-  const buildRequestInput = (submitNow: boolean) => ({
+  const buildRequestInput = (submitNow: boolean): CreateRequestInput => ({
     submit: submitNow,
+    wizardStep: step,
     apiName: api,
     displayName: display,
     environment: env,
@@ -668,8 +672,114 @@ export default function App() {
   const goCreate = () => {
     setPage("create");
     setStep(0);
+    setDraftId(null);
     setNotice("");
     closeSidebarOnSmallScreen();
+  };
+
+  // Reopens a saved draft: fills every wizard field from the stored payload and
+  // goes to the step where the draft was saved.
+  const resumeDraft = async (id: string) => {
+    const textOf = (value: unknown, fallback = "") => (typeof value === "string" ? value : fallback);
+    const recordOf = (value: unknown): Record<string, any> =>
+      typeof value === "object" && value !== null ? (value as Record<string, any>) : {};
+    setNotice("");
+    try {
+      const detail = await apiClient.getRequest(id);
+      const p = detail.payload;
+      if (!p || !p.specContent) {
+        setNotice(`Draft ${id} has no OpenAPI document saved, so it cannot be reopened.`);
+        return;
+      }
+      const product = recordOf(p.product);
+      const developer = recordOf(p.developer);
+      const developerApp = recordOf(p.developerApp);
+      const target = recordOf(p.target);
+      const authConfig = recordOf(p.authConfig);
+      // Re-validate the stored document so the upload step shows it as parsed.
+      const parsed = await apiClient.validateSpec(p.specContent);
+
+      setYaml(p.specContent);
+      setFileName(textOf(p.specFileName));
+      setParsedSpec(parsed);
+      setValidationErrors([]);
+      setValid(true);
+
+      setApi(textOf(p.apiName));
+      setDisplay(textOf(p.displayName));
+      setBasePath(textOf(p.basePath));
+      setVersion(textOf(p.version));
+      setDescription(textOf(p.description));
+      setEnv(textOf(p.environment));
+      setConsumer(textOf(p.consumer, "Internal"));
+      setAuth(textOf(p.authType, "API Key") as AuthType);
+      setApiKeyHeader(textOf(authConfig.header, "x-api-key"));
+      setBasicAuthService(textOf(authConfig.verificationEndpoint));
+      setBasicAuthSecretReference(textOf(authConfig.secretReference));
+      setOauthGrant(textOf(authConfig.grant, "Client Credentials"));
+      setOauthScopes(textOf(authConfig.scopes));
+      setOauthTokenPath(textOf(authConfig.tokenPath));
+      setJwtIssuer(textOf(authConfig.issuer));
+      setJwtAudience(textOf(authConfig.audience));
+      setJwtAlgorithm(textOf(authConfig.algorithm, "RS256"));
+      setJwksUrl(textOf(authConfig.jwksUrl));
+
+      setProductMode(textOf(product.mode, "new"));
+      setExistingProduct(product.mode === "existing" ? textOf(product.name) : "");
+      setProductName(textOf(product.name));
+      setProductDisplayName(textOf(product.displayName));
+      setProductDescription(textOf(product.description));
+      setProductSpace(textOf(product.space));
+      setProductEnvironment(textOf(product.environment));
+      setProductAccess(textOf(product.access));
+      setProductApproval(textOf(product.approval));
+      setProductProxy(textOf(product.apiProxy));
+      setProductResourcePath(textOf(product.resourcePath, "/**"));
+      setProductMethods(textOf(product.methods));
+      setProductQuotaLimit(textOf(product.quotaLimit, "1000"));
+      setProductQuotaInterval(textOf(product.quotaInterval, "1"));
+      setProductQuotaUnit(textOf(product.quotaUnit));
+      setProductOauthScopes(textOf(product.oauthScopes));
+
+      setDeveloperMode(textOf(developer.mode, "new"));
+      setExistingDeveloper(developer.mode === "existing" ? textOf(developer.name) : "");
+      setDeveloperName(textOf(developer.name));
+      setDeveloperFirstName(textOf(developer.firstName));
+      setDeveloperLastName(textOf(developer.lastName));
+      setDeveloperEmail(textOf(developer.email));
+
+      setAppMode(textOf(developerApp.mode, "new"));
+      setExistingApp(developerApp.mode === "existing" ? textOf(developerApp.name) : "");
+      setAppName(textOf(developerApp.name));
+      setAppDisplayName(textOf(developerApp.displayName));
+
+      setTargetMode(textOf(target.mode, "existing"));
+      setTarget(target.mode === "existing" ? textOf(target.name) : "");
+      setNewTarget(textOf(target.name));
+      setBackend(textOf(target.host));
+      setTargetPort(textOf(target.port, "443"));
+      setTargetProtocol(textOf(target.protocol, "HTTPS"));
+      setTargetSsl(target.sslEnabled !== false);
+
+      setPolicyConfig(recordOf(p.policies));
+
+      setIsEditingDetails(false);
+      setIsEditingOperations(false);
+      setIsEditingProduct(false);
+      setIsEditingDeveloper(false);
+      setIsEditingApp(false);
+      setIsEditingTarget(false);
+      setIsEditingPolicies(false);
+      setSectionError(null);
+
+      setDraftId(detail.id);
+      setRequestId("");
+      setStep(Math.min(5, Math.max(0, Number(p.wizardStep ?? 0))));
+      setPage("create");
+      setNotice(`Draft ${detail.id} reopened.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : `Unable to open draft ${id}.`);
+    }
   };
 
   const next = () => {
@@ -834,8 +944,11 @@ export default function App() {
   const save = async () => {
     setSubmitting(true);
     try {
-      const created = await apiClient.createRequest(buildRequestInput(false));
-      setNotice(`Draft ${created.id} saved.`, false);
+      const saved = draftId
+        ? await apiClient.updateRequest(draftId, buildRequestInput(false))
+        : await apiClient.createRequest(buildRequestInput(false));
+      setDraftId(saved.id);
+      setNotice(`Draft ${saved.id} saved.`, false);
       setPage("requests");
     } catch (error) {
       setNotice(
@@ -857,7 +970,10 @@ export default function App() {
     }
     setSubmitting(true);
     try {
-      const created = await apiClient.createRequest(buildRequestInput(true));
+      const created = draftId
+        ? await apiClient.updateRequest(draftId, buildRequestInput(false)).then(() => apiClient.submitRequest(draftId))
+        : await apiClient.createRequest(buildRequestInput(true));
+      setDraftId(null);
       setRequestId(created.id);
       setNotice("");
       setPage("provisioning");
@@ -2829,6 +2945,11 @@ paths: {}`}
                           >
                             {item.status}
                           </em>
+                          {item.status === "DRAFT" && (
+                            <button className="text-button" type="button" onClick={() => resumeDraft(item.id)}>
+                              Open draft
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -2965,7 +3086,7 @@ paths: {}`}
                       <td>
                         <button
                           className="primary"
-                          onClick={() => setPage("requests")}
+                          onClick={() => resumeDraft(item.id)}
                         >
                           View Request
                         </button>
