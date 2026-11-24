@@ -8,6 +8,33 @@ backend/    Express + TypeScript       (http://localhost:5000, proxied by Vite u
 samples/    Sample OpenAPI files for testing
 ```
 
+## Database (PostgreSQL) – optional
+
+**You can skip this section.** If `DATABASE_URL` in `backend/.env` is empty or still contains `CHANGE-ME` (the default in `.env.example`), the backend starts with an in-memory store. Requests work normally, but they are lost when the backend restarts, and the startup banner says `Storage : IN-MEMORY`.
+
+To keep requests across restarts, set up PostgreSQL once per machine:
+
+1. **Install PostgreSQL 18.** On Windows: `winget install PostgreSQL.PostgreSQL.18`, or use the installer from https://www.postgresql.org/download/. The installer asks for a password for the `postgres` user; keep it. The default port is `5432`.
+2. **Create the database** `aamp`. In pgAdmin 4, right-click **Databases → Create → Database** and name it `aamp`. Or run `CREATE DATABASE aamp;` in psql.
+3. **Set the connection string** in `backend/.env` (copy it from `.env.example` first):
+   ```
+   DATABASE_URL=postgres://postgres:YOUR-PASSWORD@localhost:5432/aamp
+   ```
+   Replace `YOUR-PASSWORD` with the password from step 1. If you chose a different port, change `5432`.
+4. **Start the backend.** The `provisioning_requests` table and its ID sequence are created automatically on the first start.
+
+Each developer runs their own database, so requests made on one machine don't appear on another.
+
+**Common startup errors**
+
+| Message | Fix |
+| --- | --- |
+| `DATABASE_URL is not set` | Add the `DATABASE_URL` line to `backend/.env` (step 3). |
+| `ECONNREFUSED` / `connect ECONNREFUSED 127.0.0.1:5432` | PostgreSQL isn't running, or the port in `DATABASE_URL` is wrong. Check the `postgresql-x64-18` service in Windows Services. |
+| `password authentication failed` | The password in `DATABASE_URL` doesn't match the one set at install. |
+| `database "aamp" does not exist` | Create the database (step 2). |
+| `permission denied for schema public` | The database user can't create the table. Use the `postgres` user, or grant it `CREATE` on the `public` schema. |
+
 ## Quick start
 
 ```bash
@@ -104,5 +131,5 @@ If the UI cannot connect to the backend:
 - Shared flows must already exist and be deployed in the environment; uploading a *new* shared-flow bundle is not implemented.
 - Multiple CORS origins are supported (one policy per origin); a single `*` is fine too.
 - The backend API itself has **no authentication yet**. Do not expose it beyond your machine/network until that is addressed.
-- Requests are stored in **PostgreSQL** (table `provisioning_requests`, created automatically at startup). Set `DATABASE_URL` in `backend/.env`; the backend will not start without it.
+- Requests are stored in **PostgreSQL** (table `provisioning_requests`, created automatically at startup) when `DATABASE_URL` is set in `backend/.env`. Without it, requests live in memory and are lost on restart.
 - Names must follow Apigee rules (letters, digits, `.`, `_`, `-`).
