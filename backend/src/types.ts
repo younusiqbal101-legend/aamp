@@ -53,6 +53,8 @@ export interface RequestPayload {
     sslEnabled?: boolean;
   };
   policies: Record<string, unknown>;
+  /** Wizard step (0-5) the user was on when the draft was saved. */
+  wizardStep?: number;
 }
 
 export interface ProvisioningResult {

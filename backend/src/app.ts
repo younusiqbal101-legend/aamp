@@ -180,14 +180,19 @@ function toPayload(body: Record<string, unknown>): RequestPayload {
       sslEnabled: Boolean(target.sslEnabled),
     },
     policies: obj(body.policies),
+    wizardStep: Number.isInteger(body.wizardStep)
+      ? Math.min(5, Math.max(0, body.wizardStep as number))
+      : 0,
   };
 }
 
-// Never send the (potentially large) spec back in list/detail responses.
+// Never send the (potentially large) spec back in list/detail responses,
+// except for drafts: reopening a draft needs its spec and auth settings.
 function view(request: ProvisioningRequest, withDetails: boolean) {
   const { payload, ...rest } = request;
   const { specContent: _omit, authConfig: _auth, ...safePayload } = payload;
-  return withDetails ? { ...rest, payload: safePayload } : {
+  const resumable = request.status === "DRAFT";
+  return withDetails ? { ...rest, payload: resumable ? payload : safePayload } : {
     id: rest.id,
     apiName: rest.apiName,
     environment: rest.environment,
@@ -228,6 +233,23 @@ app.post("/api/requests", async (req, res) => {
   await store.save(request);
   if (body.submit === true) await startProvisioning(request);
   res.status(201).json({ success: true, data: view(request, true) });
+});
+
+// Saves changes to an existing draft (same ID), so reopening and saving again
+// does not create a new request.
+app.put("/api/requests/:id", async (req, res) => {
+  const request = await store.get(req.params.id);
+  if (!request) throw new HttpError(404, "Request not found.");
+  if (request.status !== "DRAFT") {
+    throw new HttpError(409, `Only drafts can be changed; this request is ${request.status}.`);
+  }
+  const payload = toPayload(obj(req.body));
+  request.apiName = payload.apiName;
+  request.environment = payload.environment;
+  request.payload = payload;
+  request.operations = newOperations(payload);
+  await store.save(request);
+  res.json({ success: true, data: view(request, true) });
 });
 
 app.post("/api/requests/:id/submit", async (req, res) => {
